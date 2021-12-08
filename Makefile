@@ -27,7 +27,23 @@ clean:
 	$(RM) $(PROG) $(OBJS) $(D_OBJS) $(BUILD)/$(PROG) $(DEBUG)/$(PROG)
 	@/bin/echo -e '\e[1;32mClean...\e[0m'
 
-.PHONY: all clean debug
+install:
+	@if [ ! $$UID -eq 0 ]; then echo "Must be run as root."; exit 1; fi
+	-systemctl stop mc-daemon
+	@if [ ! -f /etc/mc-daemon.conf ]; then cp mc-daemon.conf /etc/; fi
+	$(RM) /usr/local/bin/mc-daemon /etc/systemd/system/mc-daemon.service
+	cp mcd /usr/local/bin/mc-daemon
+	cp mc-daemon.service /etc/systemd/system/
+	systemctl daemon-reload
+
+uninstall:
+	@if [ ! $$UID -eq 0 ]; then echo "Must be run as root."; exit 1; fi
+	-systemctl stop mc-daemon
+	$(RM) /usr/local/bin/mc-daemon /etc/systemd/system/mc-daemon.service
+	systemctl daemon-reload
+	@echo "If you no longer want it, you may now delete /etc/mc-daemon.conf"
+
+.PHONY: all clean debug install uninstall
 
 $(BUILD)/$(PROG): $(OBJS)
 	$(CC) $(LDLIBS) $^ -o $@

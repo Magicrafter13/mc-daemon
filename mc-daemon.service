@@ -5,15 +5,15 @@ Wants=network-online.target
 #Requires=mc-daemon.socket
 
 [Service]
-User=minecraft
-Group=minecraft
+#User=minecraft
+#Group=minecraft
 Type=forking
-PIDFile=/run/mc-daemon.pid
-ExecStart=/usr/local/bin/mcd --daemon
+PIDFile=/run/mc-daemon/pid
+ExecStart=/usr/local/bin/mc-daemon --daemon
 #ExecStartPre
 #ExecStartPost
-ExecReload=/usr/local/bin/mcd --restart
-ExecStop=/usr/local/bin/mcd --stop
+ExecReload=/usr/local/bin/mc-daemon --restart
+ExecStop=/usr/local/bin/mc-daemon --stop
 #ExecStopPost
 TimeoutStopSec=120
 
