@@ -13,7 +13,7 @@ CFLAGS   =
 CXXFLAGS =
 CPPFLAGS = -c -I$(INCLUDE) -Wall -Wextra
 LDFLAGS  =
-LDLIBS   =
+LDLIBS   = -lstdc++ -lpthread
 
 all: $(BUILD)
 	@$(MAKE) $(BUILD)/$(PROG) --no-print-directory

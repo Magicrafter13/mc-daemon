@@ -1,0 +1,13 @@
+[Unit]
+Description=Minecraft Server Daemon Socket
+Documentation=https://git.matthewrease.net/mc-daemon
+Wants=network-online.target
+
+[Socket]
+ListenStream=/run/mc-daemon.socket
+SocketGroup=minecraft
+SocketMode=0640
+#ExecStartPre
+
+[Install]
+WantedBy=sockets.target
