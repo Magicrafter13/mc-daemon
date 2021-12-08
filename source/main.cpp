@@ -5,6 +5,7 @@
 #include <mutex>
 #include <stdio.h>
 #include <string>
+//#include <systemd/sd-daemon.h
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -17,6 +18,7 @@ enum _cmd_t {
 	restart,
 	stop,
 	test,
+	daemonize,
 };
 typedef enum _cmd_t Command_t;
 
@@ -77,6 +79,15 @@ int main(int argc, char *argv[]) {
 				return 1;
 			}
 		}
+		else if (argument == "--daemon") {
+			if (commands.size()) {
+				Command first = commands[0];
+				commands[0] = (Command){ .type = daemonize };
+				commands.push_back(first);
+			}
+			else
+				commands.push_back((Command){ .type = daemonize });
+		}
 		else
 			custom_file = argv[arg];
 		if (server_action)
@@ -105,11 +116,12 @@ int main(int argc, char *argv[]) {
 	// Create socket data
 	struct sockaddr_un sock;
 	sock.sun_family = AF_UNIX;
-	strcpy(sock.sun_path, "/run/mc-daemon.socket");
+	strcpy(sock.sun_path, "/run/mc-daemon/socket");
 	int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
 
 	// Check if socket already exists
-	if (access("/run/mc-daemon.socket", F_OK) == 0) {
+	if (commands[0].type != daemonize) {
+	//if (access("/run/mc-daemon/socket", F_OK) == 0) {
 		if (connect(sockfd, (struct sockaddr*)&sock, sizeof (sock)) == -1) {
 			write(2, "connect error\n", 14);
 			close(sockfd);
@@ -153,7 +165,7 @@ int main(int argc, char *argv[]) {
 	if (daemon) {
 		close(sockfd);
 		write(1, "Started daemon\n", 15);
-		std::ofstream pid_file("/run/mc-daemon.pid", std::ios_base::out);
+		std::ofstream pid_file("/run/mc-daemon/pid", std::ios_base::out);
 		pid_file << daemon << std::endl;
 		delete config;
 		return 0;
@@ -168,7 +180,7 @@ int main(int argc, char *argv[]) {
 	if (listen(sockfd, 0) == -1) {
 		write(2, "listen error\n", 13);
 		close(sockfd);
-		unlink("/run/mc-daemon.socket");
+		unlink("/run/mc-daemon/socket");
 		delete config;
 		return errno;
 	}
@@ -191,7 +203,7 @@ int main(int argc, char *argv[]) {
 		if (connectfd == -1) {
 			write(2, "accept error\n", 13);
 			close(sockfd);
-			unlink("/run/mc-daemon.socket");
+			unlink("/run/mc-daemon/socket");
 			return errno;
 		}
 		memset(buffer, '\0', 512);
@@ -205,7 +217,7 @@ int main(int argc, char *argv[]) {
 	}
 	write(1, "Daemon dying\n", 13);
 	close(sockfd);
-	unlink("/run/mc-daemon.socket");
+	unlink("/run/mc-daemon/socket");
 }
 
 std::vector<Server> *parseConfig() {

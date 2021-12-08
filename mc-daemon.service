@@ -1,14 +1,15 @@
 [Unit]
 Description=Minecraft Server Daemon
 Documentation=https://git.matthewrease.net/mc-daemon
-Requires=mc-daemon.socket
+Wants=network-online.target
+#Requires=mc-daemon.socket
 
 [Service]
 User=minecraft
 Group=minecraft
 Type=forking
 PIDFile=/run/mc-daemon.pid
-ExecStart=/usr/local/bin/mcd --start
+ExecStart=/usr/local/bin/mcd --daemon
 #ExecStartPre
 #ExecStartPost
 ExecReload=/usr/local/bin/mcd --restart
@@ -18,4 +19,4 @@ TimeoutStopSec=120
 
 [Install]
 WantedBy=multi-user.target
-Also=mc-daemon.socket
+#Also=mc-daemon.socket

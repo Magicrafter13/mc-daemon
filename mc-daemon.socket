@@ -5,9 +5,10 @@ Wants=network-online.target
 
 [Socket]
 ListenStream=/run/mc-daemon.socket
+SocketUser=minecraft
 SocketGroup=minecraft
 SocketMode=0640
-#ExecStartPre
+ExecStartPost=/usr/local/bin/mcd --daemon
 
 [Install]
 WantedBy=sockets.target
