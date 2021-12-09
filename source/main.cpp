@@ -33,54 +33,50 @@ int main(int argc, char *argv[]) {
 	std::vector<Command> commands;
 
 	// Parse arguments
-	for (int arg = 1; arg < argc; ++arg) {
-		std::string argument(argv[arg]);
-		bool server_action = false;
-		if (argument == "--daemon") {
-			if (commands.size()) {
-				Command first = commands[0];
-				commands[0] = (Command){ .type = daemonize };
-				commands.push_back(first);
-			}
-			else
-				commands.push_back((Command){ .type = daemonize });
-		}
-		else if (argument == "--quit") {
-			if (commands.empty())
-				commands.push_back((Command){ .type = quit });
-			else {
-				std::cerr << "--quit cannot be used with other arguments" << std::endl;
-				return 1;
-			}
-		}
-		else if (argument == "--test") {
-			if (commands.empty())
-				commands.push_back((Command){ .type = test });
-			else {
-				std::cerr << "--test cannot be used with other arguments" << std::endl;
-				return 1;
-			}
-		}
-		else if (argument == "--start") {
-			commands.push_back((Command){ .type = start });
-			server_action = true;
-		}
-		else if (argument == "--restart") {
-			commands.push_back((Command){ .type = restart });
-			server_action = true;
-		}
-		else if (argument == "--stop") {
-			commands.push_back((Command){ .type = stop });
-			server_action = true;
-		}
+	bool simple = false;
+	if (argc == 2) {
+		simple = true;
+		std::string argument(argv[1]);
+		Command cmd;
+		if (argument == "--daemon")
+			cmd.type = daemonize;
+		else if (argument == "--quit")
+			cmd.type = quit;
+		else if (argument == "--test")
+			cmd.type = test;
 		else
-			std::cerr << "Unexpected argument \"" << argv[arg] << "\"!" << std::endl;
-		if (server_action)
-			if (argv[arg + 1] != NULL && argv[arg + 1][0] != '-')
-				commands.back().server_name = argv[++arg];
+			simple = false;
+		if (simple)
+			commands.push_back(cmd);
 	}
-	if (commands.empty())
-		commands.push_back((Command){ .type = start });
+	if (!simple) {
+		std::string argument;
+		for (int arg = 1; arg < argc; ++arg) {
+			argument = argv[arg];
+			Command cmd = {};
+			if (argument == "--daemon" || argument == "--quit" || argument == "--test") {
+				std::cerr << argument << " cannot be used with other arguments" << std::endl;
+				return 1;
+			}
+			else if (argument == "--start")
+				cmd.type = start;
+			else if (argument == "--restart")
+				cmd.type = restart;
+			else if (argument == "--stop")
+				cmd.type = stop;
+			else {
+				std::cerr << "Unexpected argument \"" << argv[arg] << "\"!" << std::endl;
+				return 1;
+			}
+			if (argv[arg + 1] != NULL && argv[arg + 1][0] != '-')
+				cmd.server_name = argv[++arg];
+			commands.push_back(cmd);
+		}
+	}
+	if (commands.empty()) {
+		std::cerr << "Please specify at least one command!" << std::endl;
+		return 1;
+	}
 
 	std::vector<Server*> *config = parseConfig();
 	// Parse config file

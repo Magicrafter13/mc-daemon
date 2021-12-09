@@ -23,6 +23,10 @@ class Server {
 	std::condition_variable *cv;
 	std::queue<std::string> commands;
 
+	// Thread utilities
+	bool hasCommand();
+	std::string popCommand();
+	// Thread function
 	void runServer();
 
 public:
@@ -39,9 +43,6 @@ public:
 	// Thread related getters
 	std::mutex *getMtx();
 	std::condition_variable *getCv();
-	// Other thread utilities
-	bool hasCommand();
-	std::string popCommand();
 
 	// Server communication/running
 	bool start();
