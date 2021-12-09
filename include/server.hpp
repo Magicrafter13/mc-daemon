@@ -23,6 +23,8 @@ class Server {
 	std::condition_variable *cv;
 	std::queue<std::string> commands;
 
+	void runServer();
+
 public:
 	// Config related getters and setters
 	                                          std::string getName();
@@ -42,7 +44,7 @@ public:
 	std::string popCommand();
 
 	// Server communication/running
-	bool start(void (*)(Server*));
+	bool start();
 	bool restart();
 	bool stop();
 	void send(std::string);

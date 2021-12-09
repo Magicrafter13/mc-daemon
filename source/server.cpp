@@ -1,3 +1,6 @@
+#include <iostream>
+#include <sys/wait.h>
+#include <unistd.h>
 #include "server.hpp"
 
 bool Server::defaultStartup() {
@@ -57,6 +60,52 @@ bool Server::restart() {
 	return true;
 }
 
+void Server::runServer() {
+	std::cout << "Thread created" << std::endl;
+
+	// Create communication pipe
+	int fds[2];
+	pipe(fds);
+
+	pid_t child = fork();
+	if (!child) {
+		// Set up file descriptors
+		close(fds[1]);
+		dup2(fds[0], 0);
+
+		const char *argv[2] = { run.c_str(), NULL };
+
+		// Become proper user/group
+		setgid(group);
+		setuid(user);
+
+		// Run user specified program
+		if (execvp(argv[0], (char**)argv) == -1)
+			std::cerr << "execvp error when trying to run " << argv[0] << "!" << std::endl;
+		send("stop\n"); // Attempt to stop the server
+		close(fds[0]); // Destroy the pipe
+		return;
+	}
+	close(fds[0]);
+
+	std::unique_lock<std::mutex> lck(*mtx);
+	std::string command;
+	bool stop = false;
+	while (!stop) {
+		while (commands.empty())
+			cv->wait(lck);
+		command = popCommand();
+		lck.unlock();
+		if (command == "stop\n")
+			stop = true;
+		write(fds[1], command.c_str(), command.size());
+		lck.lock();
+	}
+	lck.unlock();
+	waitpid(child, NULL, 0);
+	std::cout << "Thread exiting" << std::endl;
+}
+
 void Server::send(std::string message) {
 	mtx->lock();
 	commands.push(message);
@@ -110,12 +159,12 @@ bool Server::setUser(uid_t uid) {
 	return true;
 }
 
-bool Server::start(void (*function)(Server*)) {
+bool Server::start() {
 	if (running)
 		return false;
 	mtx = new std::mutex;
 	cv = new std::condition_variable;
-	thread = new std::thread(function, (Server*)this);
+	thread = new std::thread(&Server::runServer, this);
 	running = true;
 	return true;
 }

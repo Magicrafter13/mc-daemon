@@ -28,7 +28,6 @@ struct _cmd {
 typedef struct _cmd Command;
 
 std::vector<Server*> *parseConfig();
-static void runServer(Server*);
 
 int main(int argc, char *argv[]) {
 	std::vector<Command> commands;
@@ -190,7 +189,7 @@ int main(int argc, char *argv[]) {
 	for (std::vector<Server*>::iterator s = config->begin(); s != config->end(); ++s) {
 		if ((*s)->defaultStartup()) {
 			std::cout << "Starting server [" << (*s)->getName() << "]" << std::endl;
-			(*s)->start(runServer);
+			(*s)->start();
 		}
 	}
 	// Parse any command line options given
@@ -225,11 +224,11 @@ int main(int argc, char *argv[]) {
 			case start:
 				if (c->server_name.empty())
 					for (s = config->begin(); s != config->end(); ++s)
-						std::cout << ((*s)->start(runServer) ? "Starting server [" + (*s)->getName() + "]" : "Server [" + c->server_name + "] is already running!") << std::endl;
+						std::cout << ((*s)->start() ? "Starting server [" + (*s)->getName() + "]" : "Server [" + c->server_name + "] is already running!") << std::endl;
 				else {
 					for (s = config->begin(); s != config->end(); ++s) {
 						if ((*s)->getName() == c->server_name) {
-							std::cout << ((*s)->start(runServer) ? "Starting server [" + c->server_name + "]" : "Server [" + c->server_name + "] is already running!") << std::endl;
+							std::cout << ((*s)->start() ? "Starting server [" + c->server_name + "]" : "Server [" + c->server_name + "] is already running!") << std::endl;
 							break;
 						}
 					}
@@ -300,13 +299,13 @@ int main(int argc, char *argv[]) {
 			std::vector<Server*>::iterator s;
 			if (name.empty()) {
 				for (s = config->begin(); s != config->end(); ++s)
-					if ((*s)->start(runServer))
+					if ((*s)->start())
 						std::cout << "Starting server [" << (*s)->getName() << "]" << std::endl;
 			}
 			else {
 				for (s = config->begin(); s != config->end(); ++s) {
 					if ((*s)->getName() == name) {
-						std::cout << ((*s)->start(runServer) ? "Starting server [" + (*s)->getName() + "]" : "Server [" + (*s)->getName() + "] is already running!") << std::endl;
+						std::cout << ((*s)->start() ? "Starting server [" + (*s)->getName() + "]" : "Server [" + (*s)->getName() + "] is already running!") << std::endl;
 						break;
 					}
 				}
@@ -481,57 +480,4 @@ std::vector<Server*> *parseConfig() {
 		}
 	}
 	return config;
-}
-
-static void runServer(Server *s) {
-	std::cout << "Thread created" << std::endl;
-	std::string run(s->getRun());
-
-	int fds[2];
-	pipe(fds);
-	pid_t child = fork();
-	if (!child) {
-		// Set up file descriptors
-		close(fds[1]);
-		dup2(fds[0], 0);
-
-		/*char run[s->getRun().size() + 1];
-		strcpy(run, s->getRun().c_str());*/
-		const char *argv[2] = { run.c_str(), NULL };
-		//char *argv[2];
-		/*argv[0] = run;
-		argv[1] = NULL;*/
-
-		// Become proper user/group
-		setgid(s->getGroup());
-		setuid(s->getUser());
-
-		// Run user specified program
-		if (execvp(argv[0], (char**)argv) == -1)
-			std::cerr << "execvp error when trying to run " << argv[0] << "!" << std::endl;
-		s->send("stop\n"); // Attempt to stop the server
-		close(fds[0]); // Destroy the pipe
-		return;
-	}
-	close(fds[0]);
-
-	std::mutex *mtx = s->getMtx();
-	std::condition_variable *cv = s->getCv();
-	std::unique_lock<std::mutex> lck(*mtx);
-
-	std::string command;
-	bool stop = false;
-	while (!stop) {
-		while (!s->hasCommand())
-			cv->wait(lck);
-		command = s->popCommand();
-		lck.unlock();
-		if (command == "stop\n")
-			stop = true;
-		write(fds[1], command.c_str(), command.size());
-		lck.lock();
-	}
-	lck.unlock();
-	waitpid(child, NULL, 0);
-	std::cout << "Thread exiting" << std::endl;
 }
