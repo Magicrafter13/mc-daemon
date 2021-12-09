@@ -14,7 +14,7 @@ ExecStart=/usr/local/bin/mc-daemon --daemon
 #ExecStartPost
 ExecReload=/usr/local/bin/mc-daemon --restart
 ExecStop=/usr/local/bin/mc-daemon --stop
-#ExecStopPost
+ExecStopPost=/bin/rm -f /run/mc-daemon/socket
 TimeoutStopSec=120
 
 [Install]
