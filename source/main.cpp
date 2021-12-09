@@ -4,13 +4,12 @@
 #include <stdio.h>
 #include <string>
 //#include <systemd/sd-daemon.h
-#include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
 #include "server.hpp"
+#include "usock.hpp"
 
 enum _cmd_t {
 	daemonize,
@@ -79,7 +78,7 @@ int main(int argc, char *argv[]) {
 			std::cerr << "Unexpected argument \"" << argv[arg] << "\"!" << std::endl;
 		if (server_action)
 			if (argv[arg + 1] != NULL && argv[arg + 1][0] != '-')
-				commands.back().server_name = argv[arg + 1];
+				commands.back().server_name = argv[++arg];
 	}
 	if (commands.empty())
 		commands.push_back((Command){ .type = start });
@@ -95,18 +94,15 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Create socket data
-	struct sockaddr_un sock;
-	sock.sun_family = AF_UNIX;
-	strcpy(sock.sun_path, "/run/mc-daemon/socket");
-	int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+	Socket *sock = new Socket("/run/mc-daemon/socket");
 
 	// Check if socket already exists
 	if (commands[0].type != daemonize) {
 	//if (access("/run/mc-daemon/socket", F_OK) == 0) {
-		if (connect(sockfd, (struct sockaddr*)&sock, sizeof (sock)) == -1) {
+		if (sock->connect() == -1) {
 			int err = errno;
 			std::cerr << "connect error" << std::endl;
-			close(sockfd);
+			delete sock;
 			delete config;
 			return err;
 		}
@@ -121,7 +117,7 @@ int main(int argc, char *argv[]) {
 					error = 1;
 					break;
 				case quit:
-					write(sockfd, "quit\n", 5);
+					sock->sendLine("quit");
 					break;
 				case test:
 					std::cerr << "--test did not exit after testing!\n" << std::endl;
@@ -130,27 +126,24 @@ int main(int argc, char *argv[]) {
 					break;
 				case start: {
 					//std::cout << "Sending start to daemon..." << std::endl;
-					std::string message = "start" + (c.server_name.empty() ? "" : " " + c.server_name) + "\n";
-					write(sockfd, message.c_str(), message.size());
+					sock->sendLine("start" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
 				}
 				case restart: {
 					//std::cout << "Sending restart to daemon..." << std::endl;
-					std::string message = "restart" + (c.server_name.empty() ? "" : " " + c.server_name) + "\n";
-					write(sockfd, message.c_str(), message.size());
+					sock->sendLine("restart" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
 				}
 				case stop: {
 					//std::cout << "Sending stop to daemon..." << std::endl;
-					std::string message = "stop" + (c.server_name.empty() ? "" : " " + c.server_name) + "\n";
-					write(sockfd, message.c_str(), message.size());
+					sock->sendLine("stop" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
 				}
 			}
 			if (done)
 				break;
 		}
-		close(sockfd);
+		delete sock;
 		delete config;
 		return error;
 	}
@@ -166,27 +159,27 @@ int main(int argc, char *argv[]) {
 	// Create daemon
 	pid_t daemon = fork();
 	if (daemon) {
-		close(sockfd);
 		std::cout << "Started daemon" << std::endl;
 		std::ofstream pid_file("/run/mc-daemon/pid", std::ios_base::out);
 		pid_file << daemon << std::endl;
 		pid_file.close();
+		delete sock;
 		delete config;
 		return 0;
 	}
 
 	// Newly forked daemon will execute the following code
-	if (bind(sockfd, (struct sockaddr*)&sock, sizeof (sock)) == -1) {
+	if (sock->bind() == -1) {
 		int err = errno;
-		close(sockfd);
 		std::cerr << "bind error" << std::endl;
+		delete sock;
 		delete config;
 		return err;
 	}
-	if (listen(sockfd, 0) == -1) {
+	if (sock->listen() == -1) {
 		int err = errno;
-		close(sockfd);
 		std::cerr << "listen error" << std::endl;
+		delete sock;
 		unlink("/run/mc-daemon/socket");
 		delete config;
 		return err;
@@ -206,9 +199,10 @@ int main(int argc, char *argv[]) {
 	for (std::vector<Command>::iterator c = commands.begin(); c != commands.end(); ++c) {
 		if (c == commands.begin()) {
 			if (c->type != daemonize) {
-				close(sockfd);
-				unlink("/run/mc-daemon/socket");
 				std::cerr << "Tried to start daemon but --daemon wasn't the first command?" << std::endl;
+				delete sock;
+				unlink("/run/mc-daemon/socket");
+				delete config;
 				return 1;
 			}
 			continue;
@@ -221,7 +215,7 @@ int main(int argc, char *argv[]) {
 				error = 1;
 				break;
 			case quit:
-				write(sockfd, "quit\n", 5);
+				sock->sendLine("quit");
 				break;
 			case test:
 				std::cerr << "--test did not exit after testing!\n" << std::endl;
@@ -277,33 +271,29 @@ int main(int argc, char *argv[]) {
 		if (done)
 			break;
 	}
-	if (error)
+	if (error) {
+		delete sock;
+		delete config;
 		return error;
+	}
 	// Act as daemon
 	char buffer[512];
 	while (1) {
-		int connectfd = accept(sockfd, NULL, NULL);
-		if (connectfd == -1) {
+		if (sock->accept() == -1) {
 			int err = errno;
-			close(sockfd);
 			std::cerr << "accept error" << std::endl;
+			delete sock;
 			unlink("/run/mc-daemon/socket");
+			delete config;
 			return err;
 		}
-		memset(buffer, '\0', 512);
-		read(connectfd, buffer, 512);
-		close(connectfd);
-		std::string command(buffer), name;
-		if (command.back() == '\n')
-			command.pop_back();
+		std::string command = sock->read(), name;
+		sock->close();
 		std::string::size_type space = command.find_first_of(' ');
 		if (space != std::string::npos) {
 			name = command.substr(space + 1);
 			command.erase(space);
 		}
-		/*std::cout << "buffer: " << buffer << std::endl;
-		std::cout << "command: " << command << std::endl;
-		std::cout << "name: " << name << std::endl;*/
 		if (command == "quit")
 			break;
 		else if (command == "start") {
@@ -362,8 +352,9 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	write(1, "Daemon dying\n", 13);
-	close(sockfd);
+	delete sock;
 	unlink("/run/mc-daemon/socket");
+	delete config;
 }
 
 std::vector<Server*> *parseConfig() {
@@ -494,24 +485,32 @@ std::vector<Server*> *parseConfig() {
 
 static void runServer(Server *s) {
 	std::cout << "Thread created" << std::endl;
-	char run[s->getRun().size() + 1];
-	strcpy(run, s->getRun().c_str());
-	char *argv[2];
-	argv[0] = run;
-	argv[1] = NULL;
+	std::string run(s->getRun());
 
 	int fds[2];
 	pipe(fds);
 	pid_t child = fork();
 	if (!child) {
+		// Set up file descriptors
 		close(fds[1]);
 		dup2(fds[0], 0);
+
+		/*char run[s->getRun().size() + 1];
+		strcpy(run, s->getRun().c_str());*/
+		const char *argv[2] = { run.c_str(), NULL };
+		//char *argv[2];
+		/*argv[0] = run;
+		argv[1] = NULL;*/
+
+		// Become proper user/group
 		setgid(s->getGroup());
 		setuid(s->getUser());
-		if (execvp(argv[0], argv) == -1)
+
+		// Run user specified program
+		if (execvp(argv[0], (char**)argv) == -1)
 			std::cerr << "execvp error when trying to run " << argv[0] << "!" << std::endl;
-		s->send("stop\n");
-		close(fds[0]);
+		s->send("stop\n"); // Attempt to stop the server
+		close(fds[0]); // Destroy the pipe
 		return;
 	}
 	close(fds[0]);
