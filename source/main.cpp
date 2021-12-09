@@ -1,9 +1,6 @@
-#include <condition_variable>
 #include <errno.h>
 #include <fstream>
 #include <iostream>
-#include <mutex>
-#include <queue>
 #include <stdio.h>
 #include <string>
 //#include <systemd/sd-daemon.h
@@ -11,9 +8,9 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <thread>
 #include <unistd.h>
 #include <vector>
+#include "server.hpp"
 
 enum _cmd_t {
 	daemonize,
@@ -31,158 +28,11 @@ struct _cmd {
 };
 typedef struct _cmd Command;
 
-class Server {
-	std::string name;
-	uid_t user = -1;
-	gid_t group = -1;
-	bool default_startup;
-	std::vector<std::string> before;
-	std::string run;
-	std::vector<std::string> after;
-	std::vector<std::string> notify;
-
-	bool running = false;
-	std::thread *thread;
-	std::mutex *mtx;
-	std::condition_variable *cv;
-	std::queue<std::string> commands;
-
-public:
-	std::string getName() {
-		return name;
-	}
-	bool setUser(uid_t uid) {
-		if (user != (uid_t)-1)
-			return false;
-		user = uid;
-		return true;
-	}
-	uid_t getUser() {
-		return user;
-	}
-	bool setGroup(gid_t gid) {
-		if (group != (gid_t)-1)
-			return false;
-		group = gid;
-		return true;
-	}
-	int getGroup() {
-		return group;
-	}
-	void setDefault(bool d) {
-		default_startup = d;
-	}
-	bool defaultStartup() {
-		return default_startup;
-	}
-	bool setBefore(std::vector<std::string> b) {
-		if (!before.empty())
-			return false;
-		before = b;
-		return true;
-	}
-	std::vector<std::string> getBefore() {
-		return before;
-	}
-	bool setRun(std::string r) {
-		if (!run.empty())
-			return false;
-		run = r;
-		return true;
-	}
-	std::string getRun() {
-		return run;
-	}
-	bool setAfter(std::vector<std::string> a) {
-		if (!after.empty())
-			return false;
-		after = a;
-		return true;
-	}
-	std::vector<std::string> getAfter() {
-		return after;
-	}
-	bool setNotify(std::vector<std::string> n) {
-		if (!notify.empty())
-			return false;
-		notify = n;
-		return true;
-	}
-	std::vector<std::string> getNotify() {
-		return notify;
-	}
-
-	std::mutex *getMtx() {
-		return mtx;
-	}
-	std::condition_variable *getCv() {
-		return cv;
-	}
-	bool hasCommand() {
-		return !commands.empty();
-	}
-	std::string popCommand() {
-		std::string cmd = commands.front();
-		commands.pop();
-		return cmd;
-	}
-
-	bool start(void (*function)(Server*)) {
-		if (running)
-			return false;
-		mtx = new std::mutex;
-		cv = new std::condition_variable;
-		thread = new std::thread(function, (Server*)this);
-		running = true;
-		return true;
-	}
-	bool restart() {
-		if (!running)
-			return false;
-		this->send("restart\n");
-		return true;
-	}
-	bool stop() {
-		if (!running)
-			return false;
-		this->send("stop\n");
-		thread->join();
-		delete thread;
-		delete cv;
-		delete mtx;
-		running = false;
-		return true;
-	}
-	void send(std::string message) {
-		mtx->lock();
-		commands.push(message);
-		mtx->unlock();
-		cv->notify_one();
-	}
-
-	Server(std::string name) {
-		this->name = name;
-	}
-	~Server() {
-		if (thread != nullptr)
-			delete thread;
-		if (cv != nullptr)
-			delete cv;
-		if (mtx != nullptr)
-			delete mtx;
-	}
-};
-
-const char default_file[] = "minecraft";
-const char default_dir[] = "/usr/share/minecraft/";
-
 std::vector<Server*> *parseConfig();
 static void runServer(Server*);
 
 int main(int argc, char *argv[]) {
 	std::vector<Command> commands;
-	char *custom_file = NULL;
-	char *custom_dir = NULL;
 
 	// Parse arguments
 	for (int arg = 1; arg < argc; ++arg) {
@@ -226,7 +76,7 @@ int main(int argc, char *argv[]) {
 			server_action = true;
 		}
 		else
-			custom_file = argv[arg];
+			std::cerr << "Unexpected argument \"" << argv[arg] << "\"!" << std::endl;
 		if (server_action)
 			if (argv[arg + 1] != NULL && argv[arg + 1][0] != '-')
 				commands.back().server_name = argv[arg + 1];
