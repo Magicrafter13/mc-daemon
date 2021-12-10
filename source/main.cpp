@@ -272,8 +272,8 @@ int main(int argc, char *argv[]) {
 		return error;
 	}
 	// Act as daemon
-	char buffer[512];
-	while (1) {
+	bool quit = false;
+	while (!quit) {
 		if (sock->accept() == -1) {
 			int err = errno;
 			std::cerr << "accept error" << std::endl;
@@ -282,69 +282,76 @@ int main(int argc, char *argv[]) {
 			delete config;
 			return err;
 		}
-		std::string command = sock->read(), name;
+
+		sock->read();
+		std::string command, name;
+		while (sock->hasMessage()) {
+			command = sock->nextMessage();
+			name.clear();
+
+			std::string::size_type space = command.find_first_of(' ');
+			if (space != std::string::npos) {
+				name = command.substr(space + 1);
+				command.erase(space);
+			}
+			if (command == "quit") {
+				quit = true;
+				break;
+			}
+
+			// Convert string command into struct command
+			Command cmd = {};
+			if (command == "start")
+				cmd.type = start;
+			else if (command == "restart")
+				cmd.type = restart;
+			else if (command == "stop")
+				cmd.type = stop;
+
+			// Handle command
+			if (name.empty()) {
+				// Attempt command on all servers
+				for (Server *s : *config) {
+					if (command == "start") {
+						if (!s->start())
+							continue;
+						std::cout << "Starting";
+					}
+					else if (command == "restart") {
+						if (!s->restart())
+							continue;
+						std::cout << "Restarting";
+					}
+					else if (command == "stop") {
+						if (!s->stop())
+							continue;
+						std::cout << "Stopped";
+					}
+					std::cout << " server [" << s->getName() << "]" << std::endl;
+				}
+			}
+			else {
+				std::vector<Server*>::size_type i;
+				Server *s;
+				for (i = 0; i < config->size(); ++i) {
+					if ((*config)[i]->getName() == name) {
+						s = (*config)[i];
+						break;
+					}
+				}
+				if (i == config->size())
+					std::cout << "No server named [" << name << "]!" << std::endl;
+				else {
+					if (command == "start")
+						std::cout << (s->start() ? "Starting server [" + name + "]" : "Server [" + name + "] is already running!") << std::endl;
+					else if (command == "restart")
+						std::cout << (s->restart() ? "Restarting server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
+					else if (command == "stop")
+						std::cout << (s->stop() ? "Stopped server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
+				}
+			}
+		}
 		sock->close();
-		std::string::size_type space = command.find_first_of(' ');
-		if (space != std::string::npos) {
-			name = command.substr(space + 1);
-			command.erase(space);
-		}
-		if (command == "quit")
-			break;
-		else if (command == "start") {
-			std::vector<Server*>::iterator s;
-			if (name.empty()) {
-				for (s = config->begin(); s != config->end(); ++s)
-					if ((*s)->start())
-						std::cout << "Starting server [" << (*s)->getName() << "]" << std::endl;
-			}
-			else {
-				for (s = config->begin(); s != config->end(); ++s) {
-					if ((*s)->getName() == name) {
-						std::cout << ((*s)->start() ? "Starting server [" + (*s)->getName() + "]" : "Server [" + (*s)->getName() + "] is already running!") << std::endl;
-						break;
-					}
-				}
-				if (s == config->end())
-					std::cerr << "No server named [" << name << "]!" << std::endl;
-			}
-		}
-		else if (command == "restart") {
-			std::vector<Server*>::iterator s;
-			if (name.empty()) {
-				for (s = config->begin(); s != config->end(); ++s)
-					if ((*s)->restart())
-						std::cout << "Restarting server [" + (*s)->getName() + "]" << std::endl;
-			}
-			else {
-				for (s = config->begin(); s != config->end(); ++s) {
-					if ((*s)->getName() == name) {
-						std::cout << ((*s)->restart() ? "Restarting server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
-						break;
-					}
-				}
-				if (s == config->end())
-					std::cerr << "No server named [" << name << "]!" << std::endl;
-			}
-		}
-		else if (command == "stop") {
-			std::vector<Server*>::iterator s;
-			if (name.empty()) {
-				for (s = config->begin(); s != config->end(); ++s)
-					if ((*s)->stop())
-						std::cout << "Stopped server [" + (*s)->getName() + "]" << std::endl;
-			}
-			else {
-				for (s = config->begin(); s != config->end(); ++s) {
-					if ((*s)->getName() == name) {
-						std::cout << ((*s)->stop() ? "Stopped server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
-						break;
-					}
-				}
-				if (s == config->end())
-					std::cerr << "No server named [" << name << "]!" << std::endl;
-			}
-		}
 	}
 	write(1, "Daemon dying\n", 13);
 	delete sock;

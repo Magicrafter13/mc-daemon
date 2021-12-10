@@ -1,8 +1,10 @@
+#include <queue>
 #include <string>
 #include <sys/un.h>
 
 class Socket {
 	int connectfd;
+	std::queue<std::string> messages;
 	struct sockaddr_un sock;
 	int sockfd;
 
@@ -23,11 +25,6 @@ public:
 	int bind();
 
 	/*
-	 * Close the current accepted connection.
-	 */
-	void close();
-
-	/*
 	 * Connect to the socket.
 	 */
 	int connect();
@@ -38,14 +35,24 @@ public:
 	int fd();
 
 	/*
+	 * After calling read, this will return true until there all messages have been received.
+	 */
+	bool hasMessage();
+
+	/*
 	 * Listen for connections to the socket.
 	 */
 	int listen();
 
 	/*
+	 * Returns the next message in the queue (see hasMessage).
+	 */
+	std::string nextMessage();
+
+	/*
 	 * Read a string from the socket, after a connection was accepted.
 	 */
-	std::string read();
+	void read();
 
 	/*
 	 * Send a string through the socket followed by a new line.
