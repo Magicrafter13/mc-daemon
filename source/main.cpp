@@ -395,6 +395,13 @@ std::vector<Server*> *parseConfig() {
 					return nullptr;
 				}
 			}
+			else if (key == "path") {
+				if (!config->back()->setPath(value)) {
+					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"path\" was already defined!" << std::endl;
+					delete config;
+					return nullptr;
+				}
+			}
 		}
 	}
 	conf_file.close();
@@ -403,6 +410,9 @@ std::vector<Server*> *parseConfig() {
 			std::cerr << "Error in [" << (*s)->getName() << "], no uid defined!" << std::endl;
 			delete config;
 			return nullptr;
+		}
+		else if ((*s)->getPath().empty()) {
+			std::cerr << "Error in [" << (*s)->getName() << "], no path defined!" << std::endl;
 		}
 	}
 	return config;

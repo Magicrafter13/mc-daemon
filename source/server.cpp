@@ -35,6 +35,10 @@ std::vector<std::string> Server::getNotify() {
 	return notify;
 }
 
+std::string Server::getPath() {
+	return path;
+}
+
 std::string Server::getRun() {
 	return run;
 }
@@ -73,15 +77,22 @@ void Server::runServer() {
 		close(fds[1]);
 		dup2(fds[0], 0);
 
-		const char *argv[2] = { run.c_str(), NULL };
+		// Go to the designated directory
+		if (chdir(path.c_str()) == -1) {
+			std::cerr << "chdir error (" << errno << ")" << std::endl;
+			send("stop\n");
+			close(fds[0]);
+			return;
+		}
 
 		// Become proper user/group
 		setgid(group);
 		setuid(user);
 
 		// Run user specified program
+		const char *argv[2] = { run.c_str(), NULL };
 		if (execvp(argv[0], (char**)argv) == -1)
-			std::cerr << "execvp error when trying to run " << argv[0] << "!" << std::endl;
+			std::cerr << "execvp error when trying to run " << argv[0] << "! (" << errno << ")" << std::endl;
 		send("stop\n"); // Attempt to stop the server
 		close(fds[0]); // Destroy the pipe
 		return;
@@ -142,6 +153,13 @@ bool Server::setNotify(std::vector<std::string> notify) {
 	if (!this->notify.empty())
 		return false;
 	this->notify = notify;
+	return true;
+}
+
+bool Server::setPath(std::string path) {
+	if (!this->path.empty())
+		return false;
+	this->path = path;
 	return true;
 }
 

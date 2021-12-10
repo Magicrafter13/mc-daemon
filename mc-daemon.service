@@ -13,7 +13,7 @@ ExecStart=/usr/local/bin/mc-daemon --daemon
 #ExecStartPre
 #ExecStartPost
 ExecReload=/usr/local/bin/mc-daemon --restart
-ExecStop=/usr/local/bin/mc-daemon --stop
+ExecStop=/usr/local/bin/mc-daemon --quit
 ExecStopPost=/bin/rm -f /run/mc-daemon/socket
 TimeoutStopSec=120
 

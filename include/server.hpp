@@ -15,6 +15,7 @@ class Server {
 	std::string run;
 	std::vector<std::string> after;
 	std::vector<std::string> notify;
+	std::string path;
 
 	// Thread related variables
 	bool running = false;
@@ -39,6 +40,7 @@ public:
 	bool setRun(std::string);                 std::string getRun();
 	bool setAfter(std::vector<std::string>);  std::vector<std::string> getAfter();
 	bool setNotify(std::vector<std::string>); std::vector<std::string> getNotify();
+	bool setPath(std::string);                std::string getPath();
 
 	// Thread related getters
 	std::mutex *getMtx();
