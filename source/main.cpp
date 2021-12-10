@@ -18,12 +18,14 @@ enum _cmd_t {
 	start,
 	restart,
 	stop,
+	user,
 };
 typedef enum _cmd_t Command_t;
 
 struct _cmd {
 	Command_t type;
 	std::string server_name;
+	std::string additional;
 };
 typedef struct _cmd Command;
 
@@ -64,12 +66,21 @@ int main(int argc, char *argv[]) {
 				cmd.type = restart;
 			else if (argument == "--stop")
 				cmd.type = stop;
+			else if (argument == "--command")
+				cmd.type = user;
 			else {
 				std::cerr << "Unexpected argument \"" << argv[arg] << "\"!" << std::endl;
 				return 1;
 			}
 			if (argv[arg + 1] != NULL && argv[arg + 1][0] != '-')
 				cmd.server_name = argv[++arg];
+			if (cmd.type == user) {
+				if (cmd.server_name.empty() || argv[arg + 1] == NULL) {
+					std::cerr << "--command requires a string argument that does not start with '-'!" << std::endl;
+					return 1;
+				}
+				cmd.additional = argv[++arg];
+			}
 			commands.push_back(cmd);
 		}
 	}
@@ -119,21 +130,17 @@ int main(int argc, char *argv[]) {
 					done = true;
 					error = 1;
 					break;
-				case start: {
-					//std::cout << "Sending start to daemon..." << std::endl;
+				case start:
 					sock->sendLine("start" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
-				}
-				case restart: {
-					//std::cout << "Sending restart to daemon..." << std::endl;
+				case restart:
 					sock->sendLine("restart" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
-				}
-				case stop: {
-					//std::cout << "Sending stop to daemon..." << std::endl;
+				case stop:
 					sock->sendLine("stop" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
-				}
+				case user:
+					sock->sendLine("user " + c.server_name + '\n' + c.additional);
 			}
 			if (done)
 				break;
@@ -188,89 +195,6 @@ int main(int argc, char *argv[]) {
 			(*s)->start();
 		}
 	}
-	// Parse any command line options given
-	bool done = false;
-	int error = 0;
-	for (std::vector<Command>::iterator c = commands.begin(); c != commands.end(); ++c) {
-		if (c == commands.begin()) {
-			if (c->type != daemonize) {
-				std::cerr << "Tried to start daemon but --daemon wasn't the first command?" << std::endl;
-				delete sock;
-				unlink("/run/mc-daemon/socket");
-				delete config;
-				return 1;
-			}
-			continue;
-		}
-		std::vector<Server*>::iterator s;
-		switch (c->type) {
-			case daemonize:
-				std::cerr << "--daemon did not follow correct path!\n" << std::endl;
-				done = true;
-				error = 1;
-				break;
-			case quit:
-				sock->sendLine("quit");
-				break;
-			case test:
-				std::cerr << "--test did not exit after testing!\n" << std::endl;
-				done = true;
-				error = 1;
-				break;
-			case start:
-				if (c->server_name.empty())
-					for (s = config->begin(); s != config->end(); ++s)
-						std::cout << ((*s)->start() ? "Starting server [" + (*s)->getName() + "]" : "Server [" + c->server_name + "] is already running!") << std::endl;
-				else {
-					for (s = config->begin(); s != config->end(); ++s) {
-						if ((*s)->getName() == c->server_name) {
-							std::cout << ((*s)->start() ? "Starting server [" + c->server_name + "]" : "Server [" + c->server_name + "] is already running!") << std::endl;
-							break;
-						}
-					}
-					if (s == config->end())
-						std::cerr << "No server named [" << c->server_name << "]!" << std::endl;
-				}
-				break;
-			case restart:
-				if (c->server_name.empty())
-					for (s = config->begin(); s != config->end(); ++s)
-						std::cout << ((*s)->restart() ? "Restarting server [" + (*s)->getName() + "]" : "Server [" + c->server_name + "] is not running!") << std::endl;
-				else {
-					for (s = config->begin(); s != config->end(); ++s) {
-						if ((*s)->getName() == c->server_name) {
-							std::cout << ((*s)->restart() ? "Restarting server [" + c->server_name + "]" : "Server [" + c->server_name + "] is not running!") << std::endl;
-							break;
-						}
-					}
-					if (s == config->end())
-						std::cerr << "No server named [" << c->server_name << "]!" << std::endl;
-				}
-				break;
-			case stop:
-				if (c->server_name.empty())
-					for (s = config->begin(); s != config->end(); ++s)
-						std::cout << ((*s)->stop() ? "Stopped server [" + (*s)->getName() + "]" : "Server [" + c->server_name + "] is not running!") << std::endl;
-				else {
-					for (s = config->begin(); s != config->end(); ++s) {
-						if ((*s)->getName() == c->server_name) {
-							std::cout << ((*s)->stop() ? "Stopped server [" + c->server_name + "]" : "Server [" + c->server_name + "] is not running!") << std::endl;
-							break;
-						}
-					}
-					if (s == config->end())
-						std::cerr << "No server named [" << c->server_name << "]!" << std::endl;
-				}
-				break;
-		}
-		if (done)
-			break;
-	}
-	if (error) {
-		delete sock;
-		delete config;
-		return error;
-	}
 	// Act as daemon
 	bool quit = false;
 	while (!quit) {
@@ -298,15 +222,6 @@ int main(int argc, char *argv[]) {
 				quit = true;
 				break;
 			}
-
-			// Convert string command into struct command
-			Command cmd = {};
-			if (command == "start")
-				cmd.type = start;
-			else if (command == "restart")
-				cmd.type = restart;
-			else if (command == "stop")
-				cmd.type = stop;
 
 			// Handle command
 			if (name.empty()) {
@@ -348,6 +263,15 @@ int main(int argc, char *argv[]) {
 						std::cout << (s->restart() ? "Restarting server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
 					else if (command == "stop")
 						std::cout << (s->stop() ? "Stopped server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
+					else if (command == "user") {
+						if (!sock->hasMessage()) {
+							std::cout << "Expected next line to contain custom command, but message queue was empty!" << std::endl;
+							continue;
+						}
+						std::cout << "Sending custom command to [" + name + "]:" << std::endl;
+						std::string message = sock->nextMessage();
+						s->send(message + '\n');
+					}
 				}
 			}
 		}
