@@ -351,7 +351,6 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		}
-		sock->close();
 	}
 	write(1, "Daemon dying\n", 13);
 	delete sock;

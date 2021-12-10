@@ -67,7 +67,7 @@ Socket::Socket(std::string path) {
 }
 
 Socket::~Socket() {
-	close(connectfd)
+	close(connectfd);
 }
 
 /*std::istream &operator>> (std::istream &in, Socket &s) {
