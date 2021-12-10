@@ -69,6 +69,27 @@ bool Server::restart() {
 void Server::runServer() {
 	std::cout << "Thread created" << std::endl;
 
+	signal(SIGTERM, SIG_IGN);
+
+	/*
+	 * Before
+	 */
+	pid_t child_pre = fork();
+	if (!child_pre) {
+		const char *argv[before.size() + 1];
+		std::string::size_type i;
+		for (i = 0; i < before.size(); ++i)
+			argv[i] = before[i].c_str();
+		argv[i] = NULL;
+		if (execvp(argv[0], (char**)argv) == -1)
+			std::cerr << "execvp error when trying to run " << argv[0] << "! (" << errno << ")" << std::endl;
+		return;
+	}
+	while (waitpid(child_pre, NULL, 0) == -1 && errno == EINTR);
+
+	/*
+	 * Run
+	 */
 	// Create communication pipe
 	int fds[2];
 	pipe(fds);
@@ -115,8 +136,25 @@ void Server::runServer() {
 		lck.lock();
 	}
 	lck.unlock();
-	std::cout << "Waiting for child to exit" << std::endl;
-	waitpid(child, NULL, 0);
+	std::cout << "Waiting for server to stop..." << std::endl;
+	while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
+
+	/*
+	 * After
+	 */
+	pid_t child_post = fork();
+	if (!child_post) {
+		const char *argv[after.size() + 1];
+		std::string::size_type i;
+		for (i = 0; i < after.size(); ++i)
+			argv[i] = after[i].c_str();
+		argv[i] = NULL;
+		if (execvp(argv[0], (char**)argv) == -1)
+			std::cerr << "execvp error when trying to run " << argv[0] << "! (" << errno << ")" << std::endl;
+		return;
+	}
+	while (waitpid(child_post, NULL, 0) == -1 && errno == EINTR);
+
 	std::cout << "Thread exiting" << std::endl;
 }
 
@@ -227,12 +265,10 @@ bool Server::stop() {
 	if (!running)
 		return false;
 	this->send("stop\n");
-	//std::cout << "join" << std::endl;
 	thread->join();
-	//std::cout << "delete" << std::endl;
-	delete thread;
-	delete cv;
-	delete mtx;
+	delete thread; thread = nullptr;
+	delete cv;     cv = nullptr;
+	delete mtx;    mtx = nullptr;
 	running = false;
 	return true;
 }

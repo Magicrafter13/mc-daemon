@@ -34,11 +34,13 @@ install:
 	$(RM) /usr/local/bin/mc-daemon /etc/systemd/system/mc-daemon.service
 	cp mcd /usr/local/bin/mc-daemon
 	cp mc-daemon.service /etc/systemd/system/
+	systemctl enable mc-daemon
 	systemctl daemon-reload
 
 uninstall:
 	@if [ ! $$UID -eq 0 ]; then echo "Must be run as root."; exit 1; fi
 	-systemctl stop mc-daemon
+	-systemctl disable mc-daemon
 	$(RM) /usr/local/bin/mc-daemon /etc/systemd/system/mc-daemon.service
 	systemctl daemon-reload
 	@echo "If you no longer want it, you may now delete /etc/mc-daemon.conf"

@@ -270,7 +270,7 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
-	write(1, "Daemon dying\n", 13);
+	std::cout << "Stopping servers..." << std::endl;
 	for (Server *s : servers)
 		if (s->stop())
 			std::cout << "Stopped [" << s->getName() << "]" << std::endl;
