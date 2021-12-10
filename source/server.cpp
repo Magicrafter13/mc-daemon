@@ -239,6 +239,10 @@ bool Server::stop() {
 
 Server::Server(std::string name) {
 	this->name = name;
+
+	mtx = nullptr;
+	cv = nullptr;
+	thread = nullptr;
 }
 
 Server::~Server() {
