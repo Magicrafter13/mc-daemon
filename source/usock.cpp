@@ -39,7 +39,6 @@ std::string Socket::nextMessage() {
 	return message;
 }
 
-#include <iostream>
 void Socket::read() {
 	char buffer[SOCK_BUF_SIZE] = {};
 	while (::read(connectfd, buffer, SOCK_BUF_SIZE) != -1 && buffer[0] != '\0') {
@@ -64,10 +63,13 @@ Socket::Socket(std::string path) {
 	sock.sun_family = AF_UNIX;
 	strcpy(sock.sun_path, path.c_str());
 	sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+	connectfd = -1;
 }
 
 Socket::~Socket() {
-	close(connectfd);
+	if (connectfd != -1)
+		close(connectfd);
 }
 
 /*std::istream &operator>> (std::istream &in, Socket &s) {

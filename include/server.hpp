@@ -1,3 +1,6 @@
+#ifndef SERVER_H
+#define SERVER_H
+
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -56,3 +59,5 @@ public:
 	Server(std::string);
 	~Server();
 };
+
+#endif

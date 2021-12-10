@@ -115,6 +115,7 @@ void Server::runServer() {
 		lck.lock();
 	}
 	lck.unlock();
+	std::cout << "Waiting for child to exit" << std::endl;
 	waitpid(child, NULL, 0);
 	std::cout << "Thread exiting" << std::endl;
 }
@@ -226,7 +227,9 @@ bool Server::stop() {
 	if (!running)
 		return false;
 	this->send("stop\n");
+	//std::cout << "join" << std::endl;
 	thread->join();
+	//std::cout << "delete" << std::endl;
 	delete thread;
 	delete cv;
 	delete mtx;

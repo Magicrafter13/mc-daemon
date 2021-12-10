@@ -8,6 +8,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
+#include "config.hpp"
 #include "server.hpp"
 #include "usock.hpp"
 
@@ -28,8 +29,6 @@ struct _cmd {
 	std::string additional;
 };
 typedef struct _cmd Command;
-
-std::vector<Server*> *parseConfig();
 
 int main(int argc, char *argv[]) {
 	std::vector<Command> commands;
@@ -89,15 +88,15 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	std::vector<Server*> *config = parseConfig();
+	Config config("/etc/mc-daemon.conf");
 	// Parse config file
 	if (commands[0].type == test) {
-		if (config != nullptr) {
+		if (!config.error())
 			std::cout << "Config file OK." << std::endl;
-			delete config;
-		}
-		return 0;
+		return config.error();
 	}
+	if (config.error())
+		return 1;
 
 	// Create socket data
 	Socket *sock = new Socket("/run/mc-daemon/socket");
@@ -109,7 +108,6 @@ int main(int argc, char *argv[]) {
 			int err = errno;
 			std::cerr << "connect error" << std::endl;
 			delete sock;
-			delete config;
 			return err;
 		}
 		bool done = false;
@@ -146,7 +144,6 @@ int main(int argc, char *argv[]) {
 				break;
 		}
 		delete sock;
-		delete config;
 		return error;
 	}
 	// Create service dir if it doesn't exist
@@ -166,7 +163,6 @@ int main(int argc, char *argv[]) {
 		pid_file << daemon << std::endl;
 		pid_file.close();
 		delete sock;
-		delete config;
 		return 0;
 	}
 
@@ -175,7 +171,6 @@ int main(int argc, char *argv[]) {
 		int err = errno;
 		std::cerr << "bind error" << std::endl;
 		delete sock;
-		delete config;
 		return err;
 	}
 	if (sock->listen() == -1) {
@@ -183,16 +178,16 @@ int main(int argc, char *argv[]) {
 		std::cerr << "listen error" << std::endl;
 		delete sock;
 		unlink("/run/mc-daemon/socket");
-		delete config;
 		return err;
 	}
 
 	// Start default servers
-	std::cout << "Config has " << config->size() << " servers." << std::endl;
-	for (std::vector<Server*>::iterator s = config->begin(); s != config->end(); ++s) {
-		if ((*s)->defaultStartup()) {
-			std::cout << "Starting server [" << (*s)->getName() << "]" << std::endl;
-			(*s)->start();
+	std::vector<Server*> servers = config.getServers();
+	std::cout << "Config has " << servers.size() << " servers." << std::endl;
+	for (Server *s : servers) {
+		if (s->defaultStartup()) {
+			std::cout << "Starting server [" << s->getName() << "]" << std::endl;
+			s->start();
 		}
 	}
 	// Act as daemon
@@ -203,7 +198,6 @@ int main(int argc, char *argv[]) {
 			std::cerr << "accept error" << std::endl;
 			delete sock;
 			unlink("/run/mc-daemon/socket");
-			delete config;
 			return err;
 		}
 
@@ -226,7 +220,7 @@ int main(int argc, char *argv[]) {
 			// Handle command
 			if (name.empty()) {
 				// Attempt command on all servers
-				for (Server *s : *config) {
+				for (Server *s : servers) {
 					if (command == "start") {
 						if (!s->start())
 							continue;
@@ -248,13 +242,13 @@ int main(int argc, char *argv[]) {
 			else {
 				std::vector<Server*>::size_type i;
 				Server *s;
-				for (i = 0; i < config->size(); ++i) {
-					if ((*config)[i]->getName() == name) {
-						s = (*config)[i];
+				for (i = 0; i < servers.size(); ++i) {
+					if (servers[i]->getName() == name) {
+						s = servers[i];
 						break;
 					}
 				}
-				if (i == config->size())
+				if (i == servers.size())
 					std::cout << "No server named [" << name << "]!" << std::endl;
 				else {
 					if (command == "start")
@@ -277,144 +271,9 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	write(1, "Daemon dying\n", 13);
+	for (Server *s : servers)
+		if (s->stop())
+			std::cout << "Stopped [" << s->getName() << "]" << std::endl;
 	delete sock;
 	unlink("/run/mc-daemon/socket");
-	delete config;
-}
-
-std::vector<Server*> *parseConfig() {
-	std::vector<Server*> *config = new std::vector<Server*>;
-	std::ifstream conf_file("/etc/mc-daemon.conf", std::ios_base::in);
-	std::string buffer;
-	size_t line = 0;
-	while (++line, getline(conf_file, buffer), !conf_file.eof()) {
-		// Ignore empty lines
-		if (buffer.empty())
-			continue;
-		// Ignore comments
-		if (buffer[0] == '#')
-			continue;
-		if (buffer[0] == '[') {
-			if (buffer.back() != ']') {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected ']', got '" << buffer[buffer.size()] << "'!" << std::endl;
-				delete config;
-				return nullptr;
-			}
-			if (buffer[1] == '-') {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - server name cannot start with '-'!" << std::endl;
-				delete config;
-				return nullptr;
-			}
-			config->push_back(new Server(buffer.substr(1, buffer.size() - 2)));
-		}
-		else {
-			if (config->empty()) {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - no [server] block was defined yet!" << std::endl;
-				delete config;
-				return nullptr;
-			}
-			std::string::size_type equals = buffer.find_first_of('=');
-			if (equals == std::string::npos) {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - no '=' found!" << std::endl;
-				delete config;
-				return nullptr;
-			}
-			std::string key = buffer.substr(0, equals);
-			std::string value = buffer.substr(equals + 1);
-			if (key == "user") {
-				if (!config->back()->setUser(value)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"user\" was already defined!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-			}
-			else if (key == "group") {
-				if (!config->back()->setGroup(value)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"group\" was already defined!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-			}
-			else if (key == "default") {
-				if (value != "yes" && value != "no") {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected \"yes\" or \"no\", got \"" << value << "\"!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-				config->back()->setDefault(value == "yes");
-			}
-			else if (key == "before") {
-				std::vector<std::string> server_argv;
-				while (!value.empty()) {
-					std::string::size_type space = value.find_first_of(' ');
-					server_argv.push_back(value.substr(0, space));
-					value.erase(0, space == std::string::npos ? space : space + 1);
-				}
-				if (!config->back()->setBefore(server_argv)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"before\" was already defined!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-			}
-			else if (key == "run") {
-				if (!config->back()->setRun(value)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"run\" was already defined!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-			}
-			else if (key == "after") {
-				std::vector<std::string> server_argv;
-				while (!value.empty()) {
-					std::string::size_type space = value.find_first_of(' ');
-					server_argv.push_back(value.substr(0, space));
-					value.erase(0, space == std::string::npos ? space : space + 1);
-				}
-				if (!config->back()->setAfter(server_argv)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"after\" was already defined!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-			}
-			else if (key == "notify") {
-				std::vector<std::string> server_argv;
-				while (!value.empty()) {
-					std::string::size_type space = value.find_first_of(' ');
-					server_argv.push_back(value.substr(0, space));
-					value.erase(0, space == std::string::npos ? space : space + 1);
-				}
-				if (!config->back()->setNotify(server_argv)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"notify\" was already defined!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-			}
-			else if (key == "path") {
-				if (!config->back()->setPath(value)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"path\" was already defined!" << std::endl;
-					delete config;
-					return nullptr;
-				}
-			}
-		}
-	}
-	conf_file.close();
-	for (std::vector<Server*>::iterator s = config->begin(); s != config->end(); ++s) {
-		if ((*s)->getUser() == (uid_t)-1) {
-			std::cerr << "Error in [" << (*s)->getName() << "], no user defined!" << std::endl;
-			delete config;
-			return nullptr;
-		}
-		else if ((*s)->getGroup() == (gid_t)-1) {
-			std::cerr << "Error in [" << (*s)->getName() << "], no group defined!" << std::endl;
-			delete config;
-			return nullptr;
-		}
-		else if ((*s)->getPath().empty()) {
-			std::cerr << "Error in [" << (*s)->getName() << "], no path defined!" << std::endl;
-			delete config;
-			return nullptr;
-		}
-	}
-	return config;
 }
