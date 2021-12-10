@@ -321,22 +321,16 @@ std::vector<Server*> *parseConfig() {
 			}
 			std::string key = buffer.substr(0, equals);
 			std::string value = buffer.substr(equals + 1);
-			if (key == "uid") {
-				try {
-					config->back()->setUser(std::stoi(value));
-				}
-				catch (std::exception e){
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected integer, got \"" << value << "\"!" << std::endl;
+			if (key == "user") {
+				if (!config->back()->setUser(value)) {
+					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"user\" was already defined!" << std::endl;
 					delete config;
 					return nullptr;
 				}
 			}
-			else if (key == "gid") {
-				try {
-					config->back()->setGroup(std::stoi(value));
-				}
-				catch (std::exception e){
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected integer, got \"" << value << "\"!" << std::endl;
+			else if (key == "group") {
+				if (!config->back()->setGroup(value)) {
+					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"group\" was already defined!" << std::endl;
 					delete config;
 					return nullptr;
 				}
@@ -407,12 +401,19 @@ std::vector<Server*> *parseConfig() {
 	conf_file.close();
 	for (std::vector<Server*>::iterator s = config->begin(); s != config->end(); ++s) {
 		if ((*s)->getUser() == (uid_t)-1) {
-			std::cerr << "Error in [" << (*s)->getName() << "], no uid defined!" << std::endl;
+			std::cerr << "Error in [" << (*s)->getName() << "], no user defined!" << std::endl;
+			delete config;
+			return nullptr;
+		}
+		else if ((*s)->getGroup() == (gid_t)-1) {
+			std::cerr << "Error in [" << (*s)->getName() << "], no group defined!" << std::endl;
 			delete config;
 			return nullptr;
 		}
 		else if ((*s)->getPath().empty()) {
 			std::cerr << "Error in [" << (*s)->getName() << "], no path defined!" << std::endl;
+			delete config;
+			return nullptr;
 		}
 	}
 	return config;

@@ -1,4 +1,6 @@
+#include <grp.h>
 #include <iostream>
+#include <pwd.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include "server.hpp"
@@ -142,10 +144,27 @@ void Server::setDefault(bool default_startup) {
 	this->default_startup = default_startup;
 }
 
-bool Server::setGroup(gid_t gid) {
-	if (group != (gid_t)-1)
+bool Server::setGroup(std::string group) {
+	if (this->group != (gid_t)-1)
 		return false;
-	group = gid;
+	errno = 0;
+	struct group *grp_ent = getgrnam(group.c_str());
+	if (grp_ent == NULL) {
+		switch (errno) {
+			case EINTR:
+			case EIO:
+			case EMFILE:
+			case ENFILE:
+			case ENOMEM:
+			case ERANGE:
+				std::cerr << "getpwnam error (" << errno << ")" << std::endl;
+				break;
+			default:
+				std::cerr << "No group with the name \"" << group << "\" exists in the group file!" << std::endl;
+		}
+		return false;
+	}
+	this->group = grp_ent->gr_gid;
 	return true;
 }
 
@@ -170,10 +189,26 @@ bool Server::setRun(std::string run) {
 	return true;
 }
 
-bool Server::setUser(uid_t uid) {
-	if (user != (uid_t)-1)
+bool Server::setUser(std::string user) {
+	if (this->user != (uid_t)-1)
 		return false;
-	user = uid;
+	struct passwd *pwd_ent = getpwnam(user.c_str());
+	if (pwd_ent == NULL) {
+		switch (errno) {
+			case EINTR:
+			case EIO:
+			case EMFILE:
+			case ENFILE:
+			case ENOMEM:
+			case ERANGE:
+				std::cerr << "getpwnam error (" << errno << ")" << std::endl;
+				break;
+			default:
+				std::cerr << "No user with the name \"" << user << "\" exists in the password file!" << std::endl;
+		}
+		return false;
+	}
+	this->user = pwd_ent->pw_uid;
 	return true;
 }
 

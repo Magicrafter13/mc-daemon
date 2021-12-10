@@ -33,8 +33,8 @@ class Server {
 public:
 	// Config related getters and setters
 	                                          std::string getName();
-	bool setUser(uid_t);                      uid_t getUser();
-	bool setGroup(gid_t);                     gid_t getGroup();
+	bool setUser(std::string);                uid_t getUser();
+	bool setGroup(std::string);               gid_t getGroup();
 	void setDefault(bool);                    bool defaultStartup();
 	bool setBefore(std::vector<std::string>); std::vector<std::string> getBefore();
 	bool setRun(std::string);                 std::string getRun();
