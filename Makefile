@@ -42,7 +42,6 @@ uninstall:
 	-systemctl stop mc-daemon
 	-systemctl disable mc-daemon
 	$(RM) /usr/local/bin/mc-daemon /etc/systemd/system/mc-daemon.service
-	systemctl daemon-reload
 	@echo "If you no longer want it, you may now delete /etc/mc-daemon.conf"
 
 .PHONY: all clean debug install uninstall

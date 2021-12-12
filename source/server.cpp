@@ -9,6 +9,36 @@ bool Server::defaultStartup() {
 	return default_startup;
 }
 
+pid_t Server::execute(std::vector<std::string> args) {
+	pid_t child = fork();
+	if (!child) {
+		// set up file descriptors
+		close(fds[1]);
+		dup2(fds[0], 0);
+
+		// become proper user/group
+		setgid(group);
+		setuid(user);
+
+		// Go to the designated directory
+		if (chdir(path.c_str()) == -1) {
+			std::cerr << "chdir error (" << errno << ")" << std::endl;
+			exit(1);
+		}
+
+		const char *argv[args.size() + 1];
+		std::vector<std::string>::size_type i;
+		for (i = 0; i < args.size(); ++i)
+			argv[i] = args[i].c_str();
+		argv[i] = NULL;
+		if (execvp(argv[0], (char**)argv) == -1)
+			std::cerr << "execvp error when trying to run " << argv[0] << "! (" << errno << ")" << std::endl;
+		close(fds[0]);
+		exit(errno);
+	}
+	return child;
+}
+
 std::vector<std::string> Server::getAfter() {
 	return after;
 }
@@ -33,7 +63,7 @@ std::string Server::getName() {
 	return name;
 }
 
-std::vector<std::string> Server::getNotify() {
+std::string Server::getNotify() {
 	return notify;
 }
 
@@ -69,59 +99,33 @@ bool Server::restart() {
 void Server::runServer() {
 	std::cout << "Thread created" << std::endl;
 
+	// Create communication pipe
+	pipe(fds);
+
+	pid_t child;
 	signal(SIGTERM, SIG_IGN);
 
 	/*
 	 * Before
 	 */
-	pid_t child_pre = fork();
-	if (!child_pre) {
-		const char *argv[before.size() + 1];
-		std::string::size_type i;
-		for (i = 0; i < before.size(); ++i)
-			argv[i] = before[i].c_str();
-		argv[i] = NULL;
-		if (execvp(argv[0], (char**)argv) == -1)
-			std::cerr << "execvp error when trying to run " << argv[0] << "! (" << errno << ")" << std::endl;
-		return;
+	if (!before.empty()) {
+		if (child = execute(before), child == -1)
+			return;
+		while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
 	}
-	while (waitpid(child_pre, NULL, 0) == -1 && errno == EINTR);
+
+	// Notify
+	if (!notify.empty()) {
+		if (child = execute({ notify, "Starting server." }), child == -1)
+			return;
+		while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
+	}
 
 	/*
 	 * Run
 	 */
-	// Create communication pipe
-	int fds[2];
-	pipe(fds);
-
-	pid_t child = fork();
-	if (!child) {
-		// Set up file descriptors
-		close(fds[1]);
-		dup2(fds[0], 0);
-
-		// Go to the designated directory
-		if (chdir(path.c_str()) == -1) {
-			std::cerr << "chdir error (" << errno << ")" << std::endl;
-			send("stop\n");
-			close(fds[0]);
-			return;
-		}
-
-		// Become proper user/group
-		setgid(group);
-		setuid(user);
-
-		// Run user specified program
-		const char *argv[2] = { run.c_str(), NULL };
-		if (execvp(argv[0], (char**)argv) == -1)
-			std::cerr << "execvp error when trying to run " << argv[0] << "! (" << errno << ")" << std::endl;
-		send("stop\n"); // Attempt to stop the server
-		close(fds[0]); // Destroy the pipe
+	if (child = execute({ run }), child == -1)
 		return;
-	}
-	close(fds[0]);
-
 	std::unique_lock<std::mutex> lck(*mtx);
 	std::string command;
 	bool stop = false;
@@ -130,8 +134,15 @@ void Server::runServer() {
 			cv->wait(lck);
 		command = popCommand();
 		lck.unlock();
-		if (command == "stop\n")
+		if (command == "stop\n") {
+			// Notify
+			if (!notify.empty()) {
+				if (child = execute({ notify, "Stopping server..." }), child == -1)
+					return;
+				while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
+			}
 			stop = true;
+		}
 		write(fds[1], command.c_str(), command.size());
 		lck.lock();
 	}
@@ -139,21 +150,23 @@ void Server::runServer() {
 	std::cout << "Waiting for server to stop..." << std::endl;
 	while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
 
+	// Notify
+	if (!notify.empty()) {
+		if (child = execute({ notify, "Stopped server." }), child == -1)
+			return;
+		while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
+	}
+
 	/*
 	 * After
 	 */
-	pid_t child_post = fork();
-	if (!child_post) {
-		const char *argv[after.size() + 1];
-		std::string::size_type i;
-		for (i = 0; i < after.size(); ++i)
-			argv[i] = after[i].c_str();
-		argv[i] = NULL;
-		if (execvp(argv[0], (char**)argv) == -1)
-			std::cerr << "execvp error when trying to run " << argv[0] << "! (" << errno << ")" << std::endl;
-		return;
+	if (!after.empty()) {
+		if (child = execute(after), child == -1)
+			return;
+		while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
 	}
-	while (waitpid(child_post, NULL, 0) == -1 && errno == EINTR);
+
+	close(fds[0]);
 
 	std::cout << "Thread exiting" << std::endl;
 }
@@ -207,7 +220,7 @@ bool Server::setGroup(std::string group) {
 	return true;
 }
 
-bool Server::setNotify(std::vector<std::string> notify) {
+bool Server::setNotify(std::string notify) {
 	if (!this->notify.empty())
 		return false;
 	this->notify = notify;
@@ -254,6 +267,8 @@ bool Server::setUser(std::string user) {
 bool Server::start() {
 	if (running)
 		return false;
+
+	// Start server
 	mtx = new std::mutex;
 	cv = new std::condition_variable;
 	thread = new std::thread(&Server::runServer, this);

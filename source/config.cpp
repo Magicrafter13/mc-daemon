@@ -103,13 +103,7 @@ Config::Config(std::string path) {
 				}
 			}
 			else if (key == "notify") {
-				std::vector<std::string> server_argv;
-				while (!value.empty()) {
-					std::string::size_type space = value.find_first_of(' ');
-					server_argv.push_back(value.substr(0, space));
-					value.erase(0, space == std::string::npos ? space : space + 1);
-				}
-				if (!servers.back()->setNotify(server_argv)) {
+				if (!servers.back()->setNotify(value)) {
 					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"notify\" was already defined!" << std::endl;
 					parse_error = true;
 					return;
