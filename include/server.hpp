@@ -11,14 +11,15 @@
 class Server {
 	// Config related variables
 	std::string name;
+	bool default_startup;
 	uid_t user = -1;
 	gid_t group = -1;
-	bool default_startup;
+	std::string path;
+	std::string log;
 	std::vector<std::string> before;
 	std::string run;
 	std::vector<std::string> after;
 	std::string notify;
-	std::string path;
 
 	// Thread related variables
 	bool running = false;
@@ -38,14 +39,15 @@ class Server {
 public:
 	// Config related getters and setters
 	                                          std::string getName();
+	void setDefault(bool);                    bool defaultStartup();
 	bool setUser(std::string);                uid_t getUser();
 	bool setGroup(std::string);               gid_t getGroup();
-	void setDefault(bool);                    bool defaultStartup();
+	bool setPath(std::string);                std::string getPath();
+	bool setLog(std::string);                  std::string getLog();
 	bool setBefore(std::vector<std::string>); std::vector<std::string> getBefore();
 	bool setRun(std::string);                 std::string getRun();
 	bool setAfter(std::vector<std::string>);  std::vector<std::string> getAfter();
 	bool setNotify(std::string);              std::string getNotify();
-	bool setPath(std::string);                std::string getPath();
 
 	// Thread related getters
 	std::mutex *getMtx();

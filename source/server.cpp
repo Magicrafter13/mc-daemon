@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include <grp.h>
 #include <iostream>
 #include <pwd.h>
@@ -20,11 +21,35 @@ pid_t Server::execute(std::vector<std::string> args) {
 		setgid(group);
 		setuid(user);
 
+		int logfd;
+
+		// Go to the designated logging directory (if one was set)
+		if (!log.empty()) {
+			if (chdir(log.c_str()) == -1) {
+				std::cerr << "chdir error (" << errno << ")" << std::endl;
+				exit(1);
+			}
+			if (logfd = open(("mcd." + name + ".log").c_str(), O_CREAT | O_APPEND | O_WRONLY, S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH), logfd == -1) {
+				std::cerr << "Could not open log file for writing! (" << errno << ")" << std::endl;
+				exit(1);
+			}
+		}
+
 		// Go to the designated directory
 		if (chdir(path.c_str()) == -1) {
 			std::cerr << "chdir error (" << errno << ")" << std::endl;
 			exit(1);
 		}
+		if (log.empty()) {
+			if (logfd = open(("mcd." + name + ".log").c_str(), O_CREAT | O_APPEND | O_WRONLY, S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH), logfd == -1) {
+				std::cerr << "Could not open log file for writing! (" << errno << ")" << std::endl;
+				exit(1);
+			}
+		}
+
+		// Redirect stdout and stderr to log file
+		dup2(logfd, 1);
+		dup2(logfd, 2);
 
 		const char *argv[args.size() + 1];
 		std::vector<std::string>::size_type i;
@@ -53,6 +78,10 @@ std::condition_variable *Server::getCv() {
 
 gid_t Server::getGroup() {
 	return group;
+}
+
+std::string Server::getLog() {
+	return log;
 }
 
 std::mutex *Server::getMtx() {
@@ -217,6 +246,13 @@ bool Server::setGroup(std::string group) {
 		return false;
 	}
 	this->group = grp_ent->gr_gid;
+	return true;
+}
+
+bool Server::setLog(std::string log) {
+	if (!this->log.empty())
+		return false;
+	this->log = log;
 	return true;
 }
 

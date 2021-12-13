@@ -47,7 +47,15 @@ Config::Config(std::string path) {
 			}
 			std::string key = buffer.substr(0, equals);
 			std::string value = buffer.substr(equals + 1);
-			if (key == "user") {
+			if (key == "default") {
+				if (value != "yes" && value != "no") {
+					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected \"yes\" or \"no\", got \"" << value << "\"!" << std::endl;
+					parse_error = true;
+					return;
+				}
+				servers.back()->setDefault(value == "yes");
+			}
+			else if (key == "user") {
 				if (!servers.back()->setUser(value)) {
 					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"user\" was already defined!" << std::endl;
 					parse_error = true;
@@ -61,13 +69,19 @@ Config::Config(std::string path) {
 					return;
 				}
 			}
-			else if (key == "default") {
-				if (value != "yes" && value != "no") {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected \"yes\" or \"no\", got \"" << value << "\"!" << std::endl;
+			else if (key == "path") {
+				if (!servers.back()->setPath(value)) {
+					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"path\" was already defined!" << std::endl;
 					parse_error = true;
 					return;
 				}
-				servers.back()->setDefault(value == "yes");
+			}
+			else if (key == "log") {
+				if (!servers.back()->setLog(value)) {
+					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"log\" was already defined!" << std::endl;
+					parse_error = true;
+					return;
+				}
 			}
 			else if (key == "before") {
 				std::vector<std::string> server_argv;
@@ -105,13 +119,6 @@ Config::Config(std::string path) {
 			else if (key == "notify") {
 				if (!servers.back()->setNotify(value)) {
 					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"notify\" was already defined!" << std::endl;
-					parse_error = true;
-					return;
-				}
-			}
-			else if (key == "path") {
-				if (!servers.back()->setPath(value)) {
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - key \"path\" was already defined!" << std::endl;
 					parse_error = true;
 					return;
 				}
