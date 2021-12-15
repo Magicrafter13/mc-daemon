@@ -145,7 +145,7 @@ void Server::runServer() {
 
 	// Notify
 	if (!notify.empty()) {
-		if (child = execute({ notify, "Starting server." }), child == -1)
+		if (child = execute({ notify, "Starting " + name + "." }), child == -1)
 			return;
 		while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
 	}
@@ -166,7 +166,7 @@ void Server::runServer() {
 		if (command == "stop\n") {
 			// Notify
 			if (!notify.empty()) {
-				if (child = execute({ notify, "Stopping server..." }), child == -1)
+				if (child = execute({ notify, "Stopping " + name + "..." }), child == -1)
 					return;
 				while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
 			}
@@ -181,7 +181,7 @@ void Server::runServer() {
 
 	// Notify
 	if (!notify.empty()) {
-		if (child = execute({ notify, "Stopped server." }), child == -1)
+		if (child = execute({ notify, "Stopped " + name + "." }), child == -1)
 			return;
 		while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
 	}
