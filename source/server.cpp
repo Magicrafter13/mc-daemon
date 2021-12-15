@@ -165,11 +165,9 @@ void Server::runServer() {
 		lck.unlock();
 		if (command == "stop\n") {
 			// Notify
-			if (!notify.empty()) {
-				if (child = execute({ notify, "Stopping " + name + "..." }), child == -1)
+			if (!notify.empty())
+				if (execute({ notify, "Stopping " + name + "..." }) == -1)
 					return;
-				while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
-			}
 			stop = true;
 		}
 		write(fds[1], command.c_str(), command.size());
