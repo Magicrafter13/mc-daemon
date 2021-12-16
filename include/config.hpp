@@ -1,15 +1,17 @@
+#include <map>
 #include <string>
-#include <vector>
 #include "server.hpp"
 
 class Config {
 	bool parse_error;
 	std::string path;
-	std::vector<Server*> servers;
+	std::map<std::string, Server*> servers;
 
 public:
 	bool error();
-	std::vector<Server*> getServers();
+	std::map<std::string, Server*> getServers();
+	bool parseConfigFile();
+
 	Config(std::string);
 	~Config();
 };

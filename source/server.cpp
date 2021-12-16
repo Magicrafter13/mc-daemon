@@ -1,7 +1,5 @@
 #include <fcntl.h>
-#include <grp.h>
 #include <iostream>
-#include <pwd.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include "server.hpp"
@@ -215,97 +213,60 @@ void Server::send(std::string message) {
 	cv->notify_one();
 }
 
-bool Server::setAfter(std::vector<std::string> after) {
-	if (!this->after.empty())
-		return false;
+void Server::setAfter(std::vector<std::string> after) {
 	this->after = after;
-	return true;
 }
 
-bool Server::setBefore(std::vector<std::string> before) {
-	if (!this->before.empty())
-		return false;
+void Server::setBefore(std::vector<std::string> before) {
 	this->before = before;
-	return true;
 }
 
 void Server::setDefault(bool default_startup) {
 	this->default_startup = default_startup;
 }
 
-bool Server::setGroup(std::string group) {
-	if (this->group != (gid_t)-1)
-		return false;
-	errno = 0;
-	struct group *grp_ent = getgrnam(group.c_str());
-	if (grp_ent == NULL) {
-		switch (errno) {
-			case EINTR:
-			case EIO:
-			case EMFILE:
-			case ENFILE:
-			case ENOMEM:
-			case ERANGE:
-				std::cerr << "getpwnam error (" << errno << ")" << std::endl;
-				break;
-			default:
-				std::cerr << "No group with the name \"" << group << "\" exists in the group file!" << std::endl;
-		}
-		return false;
-	}
-	this->group = grp_ent->gr_gid;
-	return true;
+bool Server::setGroup(gid_t group) {
+	bool ret = running;
+	if (ret)
+		stop();
+	this->group = group;
+	return ret;
 }
 
 bool Server::setLog(std::string log) {
-	if (!this->log.empty())
-		return false;
+	bool ret = running;
+	if (ret)
+		stop();
 	this->log = log;
-	return true;
+	return ret;
 }
 
-bool Server::setNotify(std::string notify) {
-	if (!this->notify.empty())
-		return false;
+void Server::setNotify(std::string notify) {
 	this->notify = notify;
-	return true;
 }
 
 bool Server::setPath(std::string path) {
-	if (!this->path.empty())
-		return false;
+	bool ret = running;
+	if (ret)
+		stop();
 	this->path = path;
-	return true;
+	return ret;
 }
 
 bool Server::setRun(std::string run) {
-	if (!this->run.empty())
-		return false;
+	bool ret = running;
+	if (ret)
+		stop();
 	this->run = run;
-	return true;
+	return ret;
 }
 
-bool Server::setUser(std::string user) {
-	if (this->user != (uid_t)-1)
-		return false;
-	struct passwd *pwd_ent = getpwnam(user.c_str());
-	if (pwd_ent == NULL) {
-		switch (errno) {
-			case EINTR:
-			case EIO:
-			case EMFILE:
-			case ENFILE:
-			case ENOMEM:
-			case ERANGE:
-				std::cerr << "getpwnam error (" << errno << ")" << std::endl;
-				break;
-			default:
-				std::cerr << "No user with the name \"" << user << "\" exists in the password file!" << std::endl;
-		}
-		return false;
-	}
-	this->user = pwd_ent->pw_uid;
-	return true;
+bool Server::setUser(uid_t user) {
+	bool ret = running;
+	if (ret)
+		stop();
+	this->user = user;
+	return ret;
 }
 
 bool Server::start() {

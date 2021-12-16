@@ -16,6 +16,7 @@ enum _cmd_t {
 	daemonize,
 	quit,
 	test,
+	reload,
 	start,
 	restart,
 	stop,
@@ -45,6 +46,8 @@ int main(int argc, char *argv[]) {
 			cmd.type = quit;
 		else if (argument == "--test")
 			cmd.type = test;
+		else if (argument == "--reload")
+			cmd.type = reload;
 		else
 			simple = false;
 		if (simple)
@@ -55,7 +58,7 @@ int main(int argc, char *argv[]) {
 		for (int arg = 1; arg < argc; ++arg) {
 			argument = argv[arg];
 			Command cmd = {};
-			if (argument == "--daemon" || argument == "--quit" || argument == "--test") {
+			if (argument == "--daemon" || argument == "--quit" || argument == "--test" || argument == "--reload") {
 				std::cerr << argument << " cannot be used with other arguments" << std::endl;
 				return 1;
 			}
@@ -128,6 +131,9 @@ int main(int argc, char *argv[]) {
 					done = true;
 					error = 1;
 					break;
+				case reload:
+					sock->sendLine("reload");
+					break;
 				case start:
 					sock->sendLine("start" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
@@ -182,12 +188,12 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Start default servers
-	std::vector<Server*> servers(config.getServers());
+	std::map<std::string, Server*> servers(config.getServers());
 	std::cout << "Config has " << servers.size() << " servers." << std::endl;
-	for (Server *s : servers) {
-		if (s->defaultStartup()) {
-			std::cout << "Starting server [" << s->getName() << "]" << std::endl;
-			s->start();
+	for (auto block : servers) {
+		if (block.second->defaultStartup()) {
+			std::cout << "Starting server [" << block.first << "]" << std::endl;
+			block.second->start();
 		}
 	}
 	// Act as daemon
@@ -216,17 +222,26 @@ int main(int argc, char *argv[]) {
 				quit = true;
 				break;
 			}
+			if (command == "reload") {
+				std::cout << "Reloading config file..." << std::endl;
+				if (config.parseConfigFile())
+					std::cout << "Successfully reloaded config." << std::endl;
+				else
+					std::cout << "Please fix your config file and try again - no servers were modified." << std::endl;
+				continue;
+			}
 			if (command == "restart" && name.empty()) {
 				std::cout << "Stopping all servers..." << std::endl;
-				for (Server *s : servers)
-					s->stop();
+				for (auto block : servers)
+					block.second->stop();
 				std::cout << "Stopped." << std::endl;
 				config = Config("/etc/mc-daemon.conf");
 				if (config.error())
 					return 1;
 				servers = config.getServers();
 				std::cout << "Config has " << servers.size() << " servers." << std::endl;
-				for (Server *s : servers) {
+				for (auto block : servers) {
+					Server *s = block.second;
 					if (s->defaultStartup()) {
 						std::cout << "Starting server [" << s->getName() << "]" << std::endl;
 						s->start();
@@ -238,7 +253,8 @@ int main(int argc, char *argv[]) {
 			// Handle command
 			if (name.empty()) {
 				// Attempt command on all servers
-				for (Server *s : servers) {
+				for (auto block : servers) {
+					Server *s = block.second;
 					if (command == "start") {
 						if (!s->start())
 							continue;
@@ -258,17 +274,11 @@ int main(int argc, char *argv[]) {
 				}
 			}
 			else {
-				std::vector<Server*>::size_type i;
-				Server *s;
-				for (i = 0; i < servers.size(); ++i) {
-					if (servers[i]->getName() == name) {
-						s = servers[i];
-						break;
-					}
-				}
-				if (i == servers.size())
+				auto block_it = servers.find(name);
+				if (block_it == servers.end())
 					std::cout << "No server named [" << name << "]!" << std::endl;
 				else {
+					Server *s = block_it->second;
 					if (command == "start")
 						std::cout << (s->start() ? "Starting server [" + name + "]" : "Server [" + name + "] is already running!") << std::endl;
 					else if (command == "restart")
@@ -289,9 +299,9 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	std::cout << "Stopping servers..." << std::endl;
-	for (Server *s : servers)
-		if (s->stop())
-			std::cout << "Stopped [" << s->getName() << "]" << std::endl;
+	for (auto block : servers)
+		if (block.second->stop())
+			std::cout << "Stopped [" << block.first << "]" << std::endl;
 	delete sock;
 	unlink("/run/mc-daemon/socket");
 }

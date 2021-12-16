@@ -40,14 +40,14 @@ public:
 	// Config related getters and setters
 	                                          std::string getName();
 	void setDefault(bool);                    bool defaultStartup();
-	bool setUser(std::string);                uid_t getUser();
-	bool setGroup(std::string);               gid_t getGroup();
+	bool setUser(uid_t);                      uid_t getUser();
+	bool setGroup(gid_t);                     gid_t getGroup();
 	bool setPath(std::string);                std::string getPath();
-	bool setLog(std::string);                  std::string getLog();
-	bool setBefore(std::vector<std::string>); std::vector<std::string> getBefore();
+	bool setLog(std::string);                 std::string getLog();
+	void setBefore(std::vector<std::string>); std::vector<std::string> getBefore();
 	bool setRun(std::string);                 std::string getRun();
-	bool setAfter(std::vector<std::string>);  std::vector<std::string> getAfter();
-	bool setNotify(std::string);              std::string getNotify();
+	void setAfter(std::vector<std::string>);  std::vector<std::string> getAfter();
+	void setNotify(std::string);              std::string getNotify();
 
 	// Thread related getters
 	std::mutex *getMtx();
