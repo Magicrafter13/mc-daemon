@@ -245,7 +245,7 @@ bool Config::parseConfigFile() {
 					break;
 			}
 		}
-		if (running || !exists)
+		if (running)
 			s->start();
 	}
 	for (auto block : servers) {
