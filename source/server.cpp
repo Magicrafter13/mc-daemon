@@ -163,6 +163,16 @@ void Server::runServer() {
 			cv->wait(lck);
 		command = popCommand();
 		lck.unlock();
+		if (command == "restart\n") {
+			write(fds[1], "say §4Restarting server in §c10§4 seconds!\n", 46);
+			sleep(10);
+			write(fds[1], "stop\n", 5);
+			while (waitpid(child, NULL, 0) == -1 && errno == EINTR);
+			if (child = execute({ run }), child == -1)
+				return;
+			lck.lock();
+			continue;
+		}
 		if (command == "stop\n") {
 			// Notify
 			if (!notify.empty())

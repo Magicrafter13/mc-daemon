@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Start default servers
-	std::vector<Server*> servers = config.getServers();
+	std::vector<Server*> servers(config.getServers());
 	std::cout << "Config has " << servers.size() << " servers." << std::endl;
 	for (Server *s : servers) {
 		if (s->defaultStartup()) {
@@ -214,6 +214,24 @@ int main(int argc, char *argv[]) {
 			}
 			if (command == "quit") {
 				quit = true;
+				break;
+			}
+			if (command == "restart" && name.empty()) {
+				std::cout << "Stopping all servers..." << std::endl;
+				for (Server *s : servers)
+					s->stop();
+				std::cout << "Stopped." << std::endl;
+				config = Config("/etc/mc-daemon.conf");
+				if (config.error())
+					return 1;
+				servers = config.getServers();
+				std::cout << "Config has " << servers.size() << " servers." << std::endl;
+				for (Server *s : servers) {
+					if (s->defaultStartup()) {
+						std::cout << "Starting server [" << s->getName() << "]" << std::endl;
+						s->start();
+					}
+				}
 				break;
 			}
 
