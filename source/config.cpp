@@ -10,6 +10,8 @@ enum conf_key {
 	ck_user,
 	ck_group,
 	ck_path,
+	//ck_world,
+	ck_backup,
 	ck_log,
 	ck_before,
 	ck_run,
@@ -32,6 +34,7 @@ std::map<std::string, Server*> Config::getServers() {
 
 bool Config::parseConfigFile() {
 	std::map<std::string, std::map<enum conf_key, struct conf_entry>> temp_config;
+	std::map<std::string, std::vector<std::string>> temp_worlds;
 
 	std::ifstream conf_file(path, std::ios_base::in);
 	std::string buffer, current_name;
@@ -41,28 +44,28 @@ bool Config::parseConfigFile() {
 			continue;
 		if (buffer[0] == '[') {
 			if (buffer.back() != ']') {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected ']', got '" << buffer[buffer.size()] << "'!" << std::endl;
+				std::cerr << "Error reading " << path << std::endl << "On line " << line << " - expected ']', got '" << buffer[buffer.size()] << "'!" << std::endl;
 				return false;
 			}
 			if (buffer[1] == '-') {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - server name cannot start with '-'!" << std::endl;
+				std::cerr << "Error reading " << path << std::endl << "On line " << line << " - server name cannot start with '-'!" << std::endl;
 				return false;
 			}
 			current_name = buffer.substr(1, buffer.size() - 2);
 			if (temp_config.find(current_name) != temp_config.end()) {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - A server named [" << current_name << "] was already defined!" << std::endl;
+				std::cerr << "Error reading " << path << std::endl << "On line " << line << " - A server named [" << current_name << "] was already defined!" << std::endl;
 				return false;
 			}
 			temp_config[current_name];
 		}
 		else {
 			if (current_name.empty()) {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - no [server] block was defined yet!" << std::endl;
+				std::cerr << "Error reading " << path << std::endl << "On line " << line << " - no [server] block was defined yet!" << std::endl;
 				return false;
 			}
 			std::string::size_type equals = buffer.find_first_of('=');
 			if (equals == std::string::npos) {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - no '=' found!" << std::endl;
+				std::cerr << "Error reading " << path << std::endl << "On line " << line << " - no '=' found!" << std::endl;
 				return false;
 			}
 			std::string key = buffer.substr(0, equals);
@@ -76,6 +79,10 @@ bool Config::parseConfigFile() {
 				ck = ck_group;
 			else if (key == "path")
 				ck = ck_path;
+			/*else if (key == "world")
+				ck = ck_world;*/
+			else if (key == "backup")
+				ck = ck_backup;
 			else if (key == "log")
 				ck = ck_log;
 			else if (key == "before")
@@ -87,21 +94,30 @@ bool Config::parseConfigFile() {
 			else if (key == "notify")
 				ck = ck_notify;
 			else {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " unknown key \"" << key << "\"!" << std::endl;
+				std::cerr << "Error reading " << path << std::endl << "On line " << line << " unknown key \"" << key << "\"!" << std::endl;
 				return false;
 			}
+			//if (ck != ck_world) {
 			auto orig_it = temp_config[current_name].find(ck);
 			if (orig_it != temp_config[current_name].end()) {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl;
+				std::cerr << "Error reading " << path << std::endl;
 				std::cerr << "On line " << line << " - redefinition of \"" << key << "\" as \"" << value << "\"!" << std::endl;
 				std::cerr << "\tOriginally defined on line " << orig_it->second.linenum << " as \"" << orig_it->second.value << "\"." << std::endl;
 				return false;
 			}
 			if (ck == ck_default && value != "yes" && value != "no") {
-				std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << line << " - expected \"yes\" or \"no\", got \"" << value << "\"!" << std::endl;
+				std::cerr << "Error reading " << path << std::endl << "On line " << line << " - expected \"yes\" or \"no\", got \"" << value << "\"!" << std::endl;
 				return false;
 			}
 			temp_config[current_name][ck] = (struct conf_entry){ .linenum = line, .value = value };
+			/*}
+			else {
+				if (value.empty()) {
+					std::cerr << "Error reading " << path << std::endl << "On line " << line << " - expected value for \"world\" key!" << std::endl;
+					return false;
+				}
+				temp_worlds[current_name].push_back(value);
+			}*/
 		}
 	}
 	conf_file.close();
@@ -128,7 +144,7 @@ bool Config::parseConfigFile() {
 					std::cerr << "getpwnam error (" << errno << ")" << std::endl;
 					break;
 				default:
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << block.second[ck_user].linenum << " - no such user with the name \"" << block.second[ck_user].value << "\"!" << std::endl;
+					std::cerr << "Error reading " << path << std::endl << "On line " << block.second[ck_user].linenum << " - no such user with the name \"" << block.second[ck_user].value << "\"!" << std::endl;
 			}
 			return false;
 		}
@@ -153,7 +169,7 @@ bool Config::parseConfigFile() {
 					std::cerr << "getgrnam error (" << errno << ")" << std::endl;
 					break;
 				default:
-					std::cerr << "Error reading /etc/mc-daemon.conf" << std::endl << "On line " << block.second[ck_group].linenum << " - no such group with the name \"" << block.second[ck_user].value << "\"!" << std::endl;
+					std::cerr << "Error reading " << path << std::endl << "On line " << block.second[ck_group].linenum << " - no such group with the name \"" << block.second[ck_user].value << "\"!" << std::endl;
 			}
 			return false;
 		}
@@ -202,6 +218,9 @@ bool Config::parseConfigFile() {
 					if (s->setPath(value))
 						running = true;
 					break;
+				case ck_backup:
+					s->setBackup(value);
+					break;
 				case ck_log:
 					if (s->getLog() == value)
 						break;
@@ -245,6 +264,10 @@ bool Config::parseConfigFile() {
 					break;
 			}
 		}
+		/*// Add worlds
+		for (std::string world : temp_worlds[block.first])
+			s->addWorld(world);*/
+		// Start server?
 		if (running)
 			s->start();
 	}

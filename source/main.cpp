@@ -20,6 +20,7 @@ enum _cmd_t {
 	start,
 	restart,
 	stop,
+	backup,
 	user,
 };
 typedef enum _cmd_t Command_t;
@@ -68,6 +69,8 @@ int main(int argc, char *argv[]) {
 				cmd.type = restart;
 			else if (argument == "--stop")
 				cmd.type = stop;
+			else if (argument == "--backup")
+				cmd.type = backup;
 			else if (argument == "--command")
 				cmd.type = user;
 			else {
@@ -142,6 +145,9 @@ int main(int argc, char *argv[]) {
 					break;
 				case stop:
 					sock->sendLine("stop" + (c.server_name.empty() ? "" : " " + c.server_name));
+					break;
+				case backup:
+					sock->sendLine("backup" + (c.server_name.empty() ? "" : " " + c.server_name));
 					break;
 				case user:
 					sock->sendLine("user " + c.server_name + '\n' + c.additional);
@@ -270,6 +276,11 @@ int main(int argc, char *argv[]) {
 							continue;
 						std::cout << "Stopped";
 					}
+					else if (command == "backup") {
+						if (!s->backup())
+							continue;
+						std::cout << "Backing up";
+					}
 					std::cout << " server [" << s->getName() << "]" << std::endl;
 				}
 			}
@@ -285,6 +296,8 @@ int main(int argc, char *argv[]) {
 						std::cout << (s->restart() ? "Restarting server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
 					else if (command == "stop")
 						std::cout << (s->stop() ? "Stopped server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
+					else if (command == "backup")
+						std::cout << (s->backup() ? "Backing up server [" + name + "]" : "Server [" + name + "] is not running!") << std::endl;
 					else if (command == "user") {
 						if (!sock->hasMessage()) {
 							std::cout << "Expected next line to contain custom command, but message queue was empty!" << std::endl;

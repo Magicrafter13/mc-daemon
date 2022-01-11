@@ -1,8 +1,24 @@
 #include <fcntl.h>
 #include <iostream>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include "server.hpp"
+
+/*void Server::addWorld(std::string world) {
+	worlds.push_back(world);
+}*/
+
+bool Server::backup() {
+	if (backup_dir.empty()) {
+		std::cerr << "No backup directory specified in config!" << std::endl;
+		return true;
+	}
+	if (!running)
+		return false;
+	this->send("backup\n");
+	return true;
+}
 
 bool Server::defaultStartup() {
 	return default_startup;
@@ -161,6 +177,33 @@ void Server::runServer() {
 			cv->wait(lck);
 		command = popCommand();
 		lck.unlock();
+		if (command == "backup\n") {
+			write(fds[1], "say §1Server is backing up. There might be lag while this process completes.\n", 78);
+			write(fds[1], "save-all\nsave-off\n", 18);
+			sleep(5);
+
+			std::vector<std::string> tar = { "tar", "-zcf" };
+			time_t t = time(NULL);
+			struct tm* now = localtime(&t);
+			// TODO add backup_dir to config
+			tar.push_back(backup_dir + '/' +
+					name + '_' +
+					std::to_string(now->tm_year + 1900) + '-' + std::to_string(now->tm_mon + 1) + '-' + std::to_string(now->tm_mday) + '-' + std::to_string(now->tm_hour) + '-' + std::to_string(now->tm_min) + '-' + std::to_string(now->tm_sec) +
+					".tgz");
+			tar.push_back(".");
+			pid_t tar_pid = execute(tar);
+
+			int tar_stat;
+			while (waitpid(tar_pid, &tar_stat, 0) == -1 && errno == EINTR);
+
+			write(fds[1], "save-on\n", 8);
+			if (WEXITSTATUS(tar_stat))
+				write(fds[1], "say §1An error occured while backing up, please alert an administrator!\n", 73);
+			else
+				write(fds[1], "say §1Backup finished.\n", 24);
+			lck.lock();
+			continue;
+		}
 		if (command == "restart\n") {
 			write(fds[1], "say §4Restarting server in §c10§4 seconds!\n", 46);
 			sleep(10);
@@ -215,6 +258,10 @@ void Server::send(std::string message) {
 
 void Server::setAfter(std::vector<std::string> after) {
 	this->after = after;
+}
+
+void Server::setBackup(std::string backup) {
+	backup_dir = backup;
 }
 
 void Server::setBefore(std::vector<std::string> before) {

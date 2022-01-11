@@ -15,11 +15,14 @@ class Server {
 	uid_t user = -1;
 	gid_t group = -1;
 	std::string path;
+	std::string backup_dir;
 	std::string log;
 	std::vector<std::string> before;
 	std::string run;
 	std::vector<std::string> after;
 	std::string notify;
+
+	//std::vector<std::string> worlds;
 
 	// Thread related variables
 	bool running = false;
@@ -43,11 +46,14 @@ public:
 	bool setUser(uid_t);                      uid_t getUser();
 	bool setGroup(gid_t);                     gid_t getGroup();
 	bool setPath(std::string);                std::string getPath();
+	void setBackup(std::string);
 	bool setLog(std::string);                 std::string getLog();
 	void setBefore(std::vector<std::string>); std::vector<std::string> getBefore();
 	bool setRun(std::string);                 std::string getRun();
 	void setAfter(std::vector<std::string>);  std::vector<std::string> getAfter();
 	void setNotify(std::string);              std::string getNotify();
+
+	//void addWorld(std::string);
 
 	// Thread related getters
 	std::mutex *getMtx();
@@ -58,6 +64,7 @@ public:
 	bool restart();
 	bool stop();
 	void send(std::string);
+	bool backup();
 
 	// Constructors and Destructors
 	Server(std::string);
