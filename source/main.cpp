@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string>
 //#include <systemd/sd-daemon.h
 #include <sys/stat.h>
@@ -94,7 +95,9 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	Config config("/etc/mc-daemon.conf");
+	// Get config file location and load
+	char *env_config_loc = getenv("MCD_CONFIG");
+	Config config(env_config_loc == NULL ? "/etc/mc-daemon.conf" : env_config_loc);
 	// Parse config file
 	if (commands[0].type == test) {
 		if (!config.error())
@@ -104,8 +107,12 @@ int main(int argc, char *argv[]) {
 	if (config.error())
 		return 1;
 
+	// Get data location (socket and pid file)
+	char *env_data_loc = getenv("MCD_DATA");
+	std::string data_loc = env_data_loc == NULL ? "/run/mc-daemon" : env_data_loc;
+
 	// Create socket data
-	Socket *sock = new Socket("/run/mc-daemon/socket");
+	Socket *sock = new Socket(data_loc + "/socket");
 
 	// Check if socket already exists
 	if (commands[0].type != daemonize) {
@@ -159,10 +166,10 @@ int main(int argc, char *argv[]) {
 		return error;
 	}
 	// Create service dir if it doesn't exist
-	if (mkdir("/run/mc-daemon", 0755) == -1) {
+	if (mkdir(data_loc.c_str(), 0755) == -1) {
 		if (errno != EEXIST) {
 			int err = errno;
-			std::cerr << "Could not create /run/mc-daemon/!" << std::endl;
+			std::cerr << "Could not create " << data_loc << "/!" << std::endl;
 			return err;
 		}
 	}
@@ -171,7 +178,7 @@ int main(int argc, char *argv[]) {
 	pid_t daemon = fork();
 	if (daemon) {
 		std::cout << "Started daemon" << std::endl;
-		std::ofstream pid_file("/run/mc-daemon/pid", std::ios_base::out);
+		std::ofstream pid_file((data_loc + "/pid").c_str(), std::ios_base::out);
 		pid_file << daemon << std::endl;
 		pid_file.close();
 		delete sock;
@@ -189,7 +196,7 @@ int main(int argc, char *argv[]) {
 		int err = errno;
 		std::cerr << "listen error" << std::endl;
 		delete sock;
-		unlink("/run/mc-daemon/socket");
+		unlink((data_loc + "/socket").c_str());
 		return err;
 	}
 
@@ -209,7 +216,7 @@ int main(int argc, char *argv[]) {
 			int err = errno;
 			std::cerr << "accept error" << std::endl;
 			delete sock;
-			unlink("/run/mc-daemon/socket");
+			unlink((data_loc + "/socket").c_str());
 			return err;
 		}
 
@@ -316,5 +323,5 @@ int main(int argc, char *argv[]) {
 		if (block.second->stop())
 			std::cout << "Stopped [" << block.first << "]" << std::endl;
 	delete sock;
-	unlink("/run/mc-daemon/socket");
+	unlink((data_loc + "/socket").c_str());
 }
