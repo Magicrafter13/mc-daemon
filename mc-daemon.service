@@ -1,6 +1,6 @@
 [Unit]
 Description=Minecraft Server Daemon
-Documentation=https://git.matthewrease.net/mc-daemon
+Documentation=https://gitlab.com/Magicrafter13/mc-daemon
 #Requires=network-online.target
 
 [Service]
